@@ -44,6 +44,14 @@ PrimExpr Tensor::operator()(Array<Var> indices) const {
   return operator()(arr);
 }
 
+TslExpr Tensor::TslPLoad(Array<PrimExpr> indices) const { 
+  if (ndim() != 0) {
+    CHECK_EQ(ndim(), indices.size()) << "Tensor dimension mismatch in read"
+                                     << "ndim = " << ndim() << ", indices.size=" << indices.size();
+  }
+  return TslProducerLoad((*this), indices);
+}
+
 PrimExpr Tensor::operator()(Array<PrimExpr> indices) const {
   if (ndim() != 0) {
     CHECK_EQ(ndim(), indices.size()) << "Tensor dimension mismatch in read"
@@ -63,6 +71,10 @@ Tensor Operation::output(size_t i) const {
   node->value_index = i;
   node->dtype = (*this)->output_dtype(i);
   node->shape = (*this)->output_shape(i);
+  node->write_ushape = (*this)->output_unionshape(i);
+  node->write_eshape = (*this)->output_elemshape(i);
+  node->read_ushape = Array<PrimExpr>(node->shape.size(), 1);
+  node->read_eshape = (*this)->output_shape(i);
   return Tensor(node);
 }
 
@@ -72,6 +84,7 @@ Tensor::Tensor(Array<PrimExpr> shape, DataType dtype, Operation op, int value_in
   n->dtype = dtype;
   n->op = op;
   n->value_index = value_index;
+  // TODO:investigate if this has anything to do with TSL
   data_ = std::move(n);
 }
 
@@ -85,7 +98,7 @@ TVM_REGISTER_NODE_TYPE(TensorNode);
 TVM_STATIC_IR_FUNCTOR(ReprPrinter, vtable)
     .set_dispatch<TensorNode>([](const ObjectRef& node, ReprPrinter* p) {
       auto* t = static_cast<const TensorNode*>(node.get());
-      p->stream << "Tensor(shape=" << t->shape << ", op.name=" << t->op->name << ')';
+      p->stream << "Tensor(shape=" << t->shape <<"(read:"<<t->read_ushape<<"<<"<<t->read_eshape<<">>"<<" write:"<<t->write_ushape<<"<<"<<t->write_eshape<<">>)"<< ", op.name=" << t->op->name << ')';
     });
 
 // TensorIntrin

@@ -79,12 +79,23 @@ DataType ComputeOpNode::output_dtype(size_t idx) const {
 Array<PrimExpr> BaseComputeOpNode::output_shape(size_t idx) const {
   CHECK_LT(idx, num_outputs());
   // for now, all outputs of a BaseComputeOp have the same shape
-  Array<PrimExpr> shape;
-  for (const auto& ivar : this->axis) {
-    const Range& r = ivar->dom;
-    shape.push_back(r->extent);
+  if (!out_eshape.defined() || !out_ushape.defined() || !in_eshape.defined() ||
+      !in_ushape.defined()) {
+    Array<PrimExpr> shape;
+    for (const auto& ivar : this->axis) {
+      const Range& r = ivar->dom;
+      shape.push_back(r->extent);
+    }
+    return shape;
+  } else {
+    arith::Analyzer ana;
+    Array<PrimExpr> shape;
+    for (size_t i = 0; i < this->out_eshape.size(); i++) {
+      shape.push_back(ana.Simplify(out_eshape[i] * out_ushape[i]));
+    }
+    return shape;
   }
-  return shape;
+  
 }
 
 Tensor compute(Array<PrimExpr> shape, FCompute fcompute, std::string name, std::string tag,
@@ -102,6 +113,29 @@ Tensor compute(Array<PrimExpr> shape, FCompute fcompute, std::string name, std::
 
   return ComputeOp(name, tag, attrs, axis, {fcompute(args)}).output(0);
 }
+
+Tensor compute(Array<PrimExpr> shape, TSLCompute fcompute, std::string name,
+                       std::string tag, Map<String, ObjectRef> attrs) {
+  size_t ndim = shape.size();
+  std::vector<IterVar> axis;
+  std::vector<Var> args;
+  for (size_t i = 0; i < ndim; i++) {
+    std::ostringstream os;
+    os << "ax" << i;
+    axis.emplace_back(IterVar(Range(0, 1), Var(os.str(), shape[i].dtype()), kDataPar));
+    args.push_back(axis.back()->var);
+
+    //TODO: 
+    //关于这个函数：其应当返回一个设置了axis长度都是1，但in/out的e/ushape都初始化为shape/1的op,因此去改compute的构造函数！
+    //另外考虑加一个吧tensor直接变成Tslexpr的类型转换函数，这样就比较优雅，TSLCompute就可以是TslExpr了！
+  }
+  return ComputeOp(name, tag, attrs, axis, Array<PrimExpr>(ndim, 1), shape,
+                   Array<PrimExpr>(ndim, 1), shape, {fcompute(args)}).output(0);
+
+}
+
+
+
 
 Array<Tensor> compute(Array<PrimExpr> shape, FBatchCompute fcompute, std::string name,
                       std::string tag, Map<String, ObjectRef> attrs) {
@@ -147,6 +181,42 @@ TVM_REGISTER_GLOBAL("te.ComputeOp")
     .set_body_typed([](std::string name, std::string tag, Map<String, ObjectRef> attrs,
                        Array<IterVar> axis,
                        Array<PrimExpr> body) { return ComputeOp(name, tag, attrs, axis, body); });
+
+ComputeOp::ComputeOp(std::string name, std::string tag, Map<String, ObjectRef> attrs,
+                     Array<IterVar> axis, Array<PrimExpr> out_ushape, Array<PrimExpr> out_eshape,
+                     Array<PrimExpr> in_ushape, Array<PrimExpr> in_eshape, Array<TslExpr> body) {
+  if (!attrs.defined()) {
+    attrs = Map<String, ObjectRef>();
+  }
+  auto n = make_object<ComputeOpNode>();
+  n->name = std::move(name);
+  n->tag = std::move(tag);
+  n->attrs = std::move(attrs);
+  n->axis = std::move(axis);
+  for (size_t i = 0; i < body.size(); i++)
+  {
+    n->body.push_back(body[i]);
+  }
+  n->out_ushape = std::move(out_ushape);
+  n->out_eshape = std::move(out_eshape);
+  n->in_ushape = std::move(in_ushape);
+  n->in_eshape = std::move(in_eshape);
+  if (n->body[0]->IsInstance<tir::ReduceNode>()) { //TODO: investigate
+    const tir::ReduceNode* reduce = n->body[0].as<tir::ReduceNode>();
+    n->reduce_axis = reduce->axis;
+  }
+  //VerifyComputeOp(n.get());
+  //TODO:visitors needs to be modified to support TslExprs.
+  data_ = std::move(n);
+}
+
+/*
+TVM_REGISTER_GLOBAL("te.ComputeOp")
+    .set_body_typed([](std::string name, std::string tag, Map<String, ObjectRef> attrs,
+                       Array<IterVar> axis, Array<PrimExpr> out_ushape, Array<PrimExpr> out_eshape,
+                       Array<PrimExpr> in_ushape, Array<PrimExpr> in_eshape,
+                       Array<TslExpr> body) { return ComputeOp(name, tag, attrs, axis,out_ushape,out_eshape,in_ushape,in_eshape,body); });
+*/
 
 // The schedule related logics
 Array<Tensor> ComputeOpNode::InputTensors() const {

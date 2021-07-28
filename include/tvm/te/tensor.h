@@ -28,7 +28,7 @@
 #include <tvm/node/container.h>
 #include <tvm/tir/expr.h>
 #include <tvm/tir/op.h>
-
+#include <tvm/tsl/tir/expr.h>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -70,6 +70,12 @@ class TensorNode : public DataProducerNode {
  public:
   /*! \brief The shape of the tensor */
   Array<PrimExpr> shape;
+
+  Array<PrimExpr> write_ushape;
+  Array<PrimExpr> write_eshape;
+  Array<PrimExpr> read_ushape;
+  Array<PrimExpr> read_eshape;
+
   /*! \brief data type in the content of the tensor */
   DataType dtype;
   /*! \brief the source operation, can be None */
@@ -81,6 +87,10 @@ class TensorNode : public DataProducerNode {
 
   void VisitAttrs(AttrVisitor* v) {
     v->Visit("shape", &shape);
+    v->Visit("write_ushape", &write_ushape);
+    v->Visit("write_ehape", &write_eshape);
+    v->Visit("read_ushape", &read_ushape);
+    v->Visit("read_ehape", &read_eshape);
     v->Visit("dtype", &dtype);
     v->Visit("op", &op);
     v->Visit("value_index", &value_index);
@@ -143,6 +153,8 @@ class Tensor : public DataProducer {
    * \brief data structure to represent a slice that fixes first k coordinates.
    *  This is used to enable syntax sugar of Tensor[x][y][z] to get the element.
    */
+  TVM_DLL TslExpr TslPLoad(Array<PrimExpr> indices) const;
+
   class Slice {
    public:
     // construct via tensor and indices

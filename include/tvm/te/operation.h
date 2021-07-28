@@ -86,6 +86,15 @@ class TVM_DLL OperationNode : public Object {
    * \brief List all the input Tensors.
    * \return List of input tensors.
    */
+
+  virtual Array<PrimExpr> output_unionshape(size_t i) const = 0;
+
+  virtual Array<PrimExpr> output_elemshape(size_t i) const = 0;
+
+  virtual Array<PrimExpr> input_unionshape(size_t i) const = 0;
+
+  virtual Array<PrimExpr> input_elemshape(size_t i) const = 0;
+
   virtual Array<Tensor> InputTensors() const = 0;
   /*!
    * \brief Replace the input of the operation by pattern specified by rmap.
@@ -152,6 +161,10 @@ class PlaceholderOpNode : public OperationNode {
  public:
   /*! \brief The shape of the input */
   Array<PrimExpr> shape;
+  Array<PrimExpr> out_ushape;
+  Array<PrimExpr> out_eshape;
+  Array<PrimExpr> in_ushape;
+  Array<PrimExpr> in_eshape;
   /*! \brief The data type of the input. */
   DataType dtype;
   // override behavior.
@@ -159,6 +172,22 @@ class PlaceholderOpNode : public OperationNode {
   Array<IterVar> root_iter_vars() const final;
   DataType output_dtype(size_t i) const final;
   Array<PrimExpr> output_shape(size_t i) const final;
+  Array<PrimExpr> output_unionshape(size_t i) const final {
+    CHECK_EQ(i, 0);
+    return out_ushape;
+  }
+  Array<PrimExpr> output_elemshape(size_t i) const final {
+    CHECK_EQ(i, 0);
+    return out_eshape;
+  }
+  Array<PrimExpr> input_unionshape(size_t i) const final {
+    CHECK_EQ(i, 0);
+    return in_ushape;
+  }
+  Array<PrimExpr> input_elemshape(size_t i) const final {
+    CHECK_EQ(i, 0);
+    return in_eshape;
+  }
   Array<Tensor> InputTensors() const final;
   Operation ReplaceInputs(const Operation& self,
                           const std::unordered_map<Tensor, Tensor>& rmap) const final;
@@ -177,6 +206,10 @@ class PlaceholderOpNode : public OperationNode {
     v->Visit("tag", &tag);
     v->Visit("attrs", &attrs);
     v->Visit("shape", &shape);
+    v->Visit("out_ushape", &out_ushape);
+    v->Visit("out_eshape", &out_eshape);
+    v->Visit("in_ushape", &in_ushape);
+    v->Visit("int_eshape", &in_eshape);
     v->Visit("dtype", &dtype);
   }
 
@@ -206,9 +239,18 @@ class TVM_DLL BaseComputeOpNode : public OperationNode {
   Array<IterVar> axis;
   /*! \brief IterVar on each reduction axis, if the body is a Reduce */
   Array<IterVar> reduce_axis;
+
+  Array<PrimExpr> out_ushape;
+  Array<PrimExpr> out_eshape;
+  Array<PrimExpr> in_ushape;
+  Array<PrimExpr> in_eshape;
   // override functions
   Array<IterVar> root_iter_vars() const final;
   Array<PrimExpr> output_shape(size_t idx) const final;
+  Array<PrimExpr> output_unionshape(size_t i) const final { return out_ushape; }
+  Array<PrimExpr> output_elemshape(size_t i) const final { return out_eshape; }
+  Array<PrimExpr> input_unionshape(size_t i) const final { return in_ushape; }
+  Array<PrimExpr> input_elemshape(size_t i) const final { return in_eshape; }
   void GatherBound(const Operation& self, const std::unordered_map<Tensor, TensorDom>& tensor_dom,
                    std::unordered_map<IterVar, Range>* out_dom_map) const final;
   Stmt BuildRealize(const Stage& stage, const std::unordered_map<IterVar, Range>& realize_map,
@@ -248,6 +290,10 @@ class TVM_DLL ComputeOpNode : public BaseComputeOpNode {
     v->Visit("axis", &axis);
     v->Visit("reduce_axis", &reduce_axis);
     v->Visit("body", &body);
+    v->Visit("out_ushape", &out_ushape);
+    v->Visit("out_eshape", &out_eshape);
+    v->Visit("in_ushape", &in_ushape);
+    v->Visit("in_eshape", &in_eshape);
   }
 
   static constexpr const char* _type_key = "ComputeOp";
@@ -262,7 +308,9 @@ class ComputeOp : public Operation {
  public:
   TVM_DLL ComputeOp(std::string name, std::string tag, Map<String, ObjectRef> attrs,
                     Array<IterVar> axis, Array<PrimExpr> body);
-
+  TVM_DLL ComputeOp(std::string name, std::string tag, Map<String, ObjectRef> attrs,
+                    Array<IterVar> axis, Array<PrimExpr> out_ushape, Array<PrimExpr> out_eshape,
+                    Array<PrimExpr> in_ushape, Array<PrimExpr> in_eshape, Array<TslExpr> body);
   TVM_DEFINE_OBJECT_REF_METHODS(ComputeOp, Operation, ComputeOpNode);
 };
 
@@ -361,6 +409,14 @@ class ScanOpNode : public OperationNode {
   Array<IterVar> root_iter_vars() const final;
   DataType output_dtype(size_t i) const final;
   Array<PrimExpr> output_shape(size_t i) const final;
+  // TODO: add implementation
+  Array<PrimExpr> output_unionshape(size_t i) const final { return {}; }
+  // TODO: add implementation
+  Array<PrimExpr> output_elemshape(size_t i) const final { return {}; }
+  // TODO: add implementation
+  Array<PrimExpr> input_unionshape(size_t i) const final { return {}; }
+  // TODO: add implementation
+  Array<PrimExpr> input_elemshape(size_t i) const final { return {}; }
   Array<Tensor> InputTensors() const final;
   Operation ReplaceInputs(const Operation& self,
                           const std::unordered_map<Tensor, Tensor>& rmap) const final;
@@ -424,6 +480,14 @@ class ExternOpNode : public OperationNode {
   Array<IterVar> root_iter_vars() const final;
   DataType output_dtype(size_t i) const final;
   Array<PrimExpr> output_shape(size_t i) const final;
+  // TODO: add implementation
+  Array<PrimExpr> output_unionshape(size_t i) const final { return {}; }
+  // TODO: add implementation
+  Array<PrimExpr> output_elemshape(size_t i) const final { return {}; }
+  // TODO: add implementation
+  Array<PrimExpr> input_unionshape(size_t i) const final { return {}; }
+  // TODO: add implementation
+  Array<PrimExpr> input_elemshape(size_t i) const final { return {}; }
   Array<Tensor> InputTensors() const final;
   Operation ReplaceInputs(const Operation& self,
                           const std::unordered_map<Tensor, Tensor>& rmap) const final;
@@ -489,6 +553,14 @@ class HybridOpNode : public OperationNode {
   Array<IterVar> root_iter_vars() const final;
   DataType output_dtype(size_t i) const final;
   Array<PrimExpr> output_shape(size_t i) const final;
+  // TODO: add implementation
+  Array<PrimExpr> output_unionshape(size_t i) const final { return {}; }
+  // TODO: add implementation
+  Array<PrimExpr> output_elemshape(size_t i) const final { return {}; }
+  // TODO: add implementation
+  Array<PrimExpr> input_unionshape(size_t i) const final { return {}; }
+  // TODO: add implementation
+  Array<PrimExpr> input_elemshape(size_t i) const final { return {}; }
   Array<Tensor> InputTensors() const final;
   Operation ReplaceInputs(const Operation& self,
                           const std::unordered_map<Tensor, Tensor>& rmap) const final;
@@ -554,6 +626,8 @@ TVM_DLL IterVar reduce_axis(Range dom, std::string name = "rv");
 /*! \brief The compute function to specify the input source of a Tensor */
 using FCompute = std::function<PrimExpr(const Array<Var>& i)>;
 
+using TSLCompute = std::function<TslExpr(const Array<Var>& i)>;
+
 /*! \brief The compute function to specify the inputs source of Tensors */
 using FBatchCompute = std::function<Array<PrimExpr>(const Array<Var>& i)>;
 
@@ -578,7 +652,9 @@ TVM_DLL Tensor placeholder(Array<PrimExpr> shape, DataType dtype = DataType::Flo
 TVM_DLL Tensor compute(Array<PrimExpr> shape, FCompute fcompute, std::string name = "tensor",
                        std::string tag = "", Map<String, ObjectRef> attrs = {});
 
-/*!
+TVM_DLL Tensor compute(Array<PrimExpr> shape, TSLCompute fcompute, std::string name = "tensor",
+                       std::string tag = "", Map<String, ObjectRef> attrs = {});
+    /*!
  * \brief Construct a new tensor by computing over shape,
  *  using the computation rule: result_tensor[axis] = fcompute(axis)
  * \param shape Shape of the tensor.
@@ -588,8 +664,8 @@ TVM_DLL Tensor compute(Array<PrimExpr> shape, FCompute fcompute, std::string nam
  * \param attrs Optional additional attributes of the compute.
  */
 TVM_DLL Array<Tensor> compute(Array<PrimExpr> shape, FBatchCompute fcompute,
-                              std::string name = "tensor", std::string tag = "",
-                              Map<String, ObjectRef> attrs = {});
+                                  std::string name = "tensor", std::string tag = "",
+                                  Map<String, ObjectRef> attrs = {});
 
 /*!
  * \brief Construct new tensors by scan.
@@ -633,6 +709,38 @@ inline Tensor compute(Array<PrimExpr> shape, std::function<PrimExpr(Var, Var, Va
   FCompute fc = [f](const Array<Var>& i) { return f(i[0], i[1], i[2], i[3]); };
   return compute(shape, fc, name, tag, attrs);
 }
+
+// xjx added
+inline Tensor compute(Array<PrimExpr> shape, std::function<TslExpr(Var)> f, std::string name = "tensor",
+                      std::string tag = "", Map<String, ObjectRef> attrs = {}) {
+  TSLCompute fc = [f](const Array<Var>& i) { return f(i[0]); };
+  return compute(shape, fc, name, tag, attrs);
+}
+
+// xjx added
+inline Tensor compute(Array<PrimExpr> shape, std::function<TslExpr(Var,Var)> f,
+                      std::string name = "tensor", std::string tag = "",
+                      Map<String, ObjectRef> attrs = {}) {
+  TSLCompute fc = [f](const Array<Var>& i) { return f(i[0],i[1]); };
+  return compute(shape, fc, name, tag, attrs);
+}
+
+// xjx added
+inline Tensor compute(Array<PrimExpr> shape, std::function<TslExpr(Var,Var,Var)> f,
+                      std::string name = "tensor", std::string tag = "",
+                      Map<String, ObjectRef> attrs = {}) {
+  TSLCompute fc = [f](const Array<Var>& i) { return f(i[0],i[1],i[2]); };
+  return compute(shape, fc, name, tag, attrs);
+}
+
+// xjx added
+inline Tensor compute(Array<PrimExpr> shape, std::function<TslExpr(Var, Var, Var, Var)> f,
+                      std::string name = "tensor", std::string tag = "",
+                      Map<String, ObjectRef> attrs = {}) {
+  TSLCompute fc = [f](const Array<Var>& i) { return f(i[0], i[1], i[2], i[3]); };
+  return compute(shape, fc, name, tag, attrs);
+}
+
 
 // inline function.
 inline const OperationNode* Operation::operator->() const {

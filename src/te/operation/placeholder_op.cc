@@ -54,6 +54,8 @@ PlaceholderOp::PlaceholderOp(std::string name, Array<PrimExpr> shape, DataType d
   auto n = make_object<PlaceholderOpNode>();
   n->name = name;
   n->shape = shape;
+  n->out_eshape = shape;
+  n->out_ushape = Array<PrimExpr>(shape.size(), 1);
   n->dtype = dtype;
   data_ = std::move(n);
 }
