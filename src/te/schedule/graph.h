@@ -59,6 +59,10 @@ using FeedGraph = std::unordered_map<Tensor, std::vector<Operation> >;
  * \return The result map.
  */
 ReadGraph CreateReadGraph(const Array<Operation>& roots);
+/*!
+TVM中createreadgraph函数和schedule中实现的十分混乱，schduleNode里的outputs并不会随着op的改变而更新，真正会更新的是op2stagemap，因此实现一个可靠的构建readgraph的函数
+ */
+ReadGraph CreateReliableReadGraph(const Array<Operation>& roots);
 
 /*!
  * \brief Get minimum subgraph between outputs and inputs.

@@ -118,6 +118,17 @@ void ExprVisitor::VisitExpr_(const ShuffleNode* op) {
 
 void ExprVisitor::VisitExpr_(const BroadcastNode* op) { this->VisitExpr(op->value); }
 
+void ExprVisitor::VisitExpr_(const TslAddNode* op) { 
+  this->VisitExpr(op->a); 
+  this->VisitExpr(op->b);
+}
+
+void ExprVisitor::VisitExpr_(const TslProducerLoadNode* op){
+  VisitArray(op->indices, [this](const PrimExpr& e) { this->VisitExpr(e); });
+}
+
+
+
 PrimExpr ExprMutator::VisitExpr_(const VarNode* op) { return GetRef<PrimExpr>(op); }
 
 PrimExpr ExprMutator::VisitExpr_(const SizeVarNode* op) {

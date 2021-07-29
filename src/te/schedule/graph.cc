@@ -93,6 +93,33 @@ ReadGraph CreateReadGraph(const Array<Operation>& roots) {
   return rmap;
 }
 
+ReadGraph CreateReliableReadGraph(const ScheduleNode* schedptr) { 
+  ReadGraph rmap;
+  std::vector<Operation> stack;
+  std::unordered_set<const Object*> visited;
+  // initialize the roots
+  auto origin_outputs = schedptr->outputs;
+  for (Operation op : origin_outputs) {
+    auto true_op = schedptr->stage_map[op]->op;
+    stack.push_back(true_op);
+    visited.insert(true_op.get());
+  }
+
+  while (!stack.empty()) {
+    Operation op = stack.back();
+    stack.pop_back();
+    Array<Tensor> deps = op->InputTensors();
+    rmap.Set(op, deps);
+    for (Tensor t : deps) {
+      if (t->op.defined() && visited.count(t->op.get()) == 0) {
+        visited.insert(t->op.get());
+        stack.push_back(t->op);
+      }
+    }
+  }
+  return rmap;
+}
+
 // Do DFS visit to get the subgraph.
 // Return if op is inside the subgraph.
 bool GetSubGraphByPostDFS_(const Operation& op, const std::unordered_set<const Object*>& boundary,

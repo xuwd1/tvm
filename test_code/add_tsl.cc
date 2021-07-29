@@ -32,6 +32,12 @@ void printTensorAttrs(const te::Tensor& A) {
 int main() {
   const int M = 512;
   const int N = 256;
+  arith::Analyzer ana;
+  auto imm1 = PrimExpr(1L);
+  auto imm2 = PrimExpr(1L);
+  auto immadd = imm1 + imm2;
+  cout << ana.Simplify(immadd) << endl;
+  
   te::Tensor A = te::placeholder({M, N}, DataType::Float(32), "A");
   te::Tensor B = te::placeholder({M, N}, DataType::Float(32), "B");
   cout << A << endl;
@@ -40,7 +46,7 @@ int main() {
   te::Tensor C = te::compute(
       {M, N}, std::function<te::TslExpr(tir::Var, tir::Var)>([=](tir::Var i, tir::Var j) {
         return te::TslAdd(A.TslPLoad({i, j}), B.TslPLoad({i, j}));
-      }));
+      }),"tsladd(A,B)");
 
   auto C_op = C->op;
   auto C_computeNode = *C_op.as<te::ComputeOpNode>();
@@ -54,4 +60,9 @@ int main() {
   cout << C_computeNode.output_unionshape(0) << endl;
 
   cout << C << endl;
+  cout << C->op->InputTensors() << endl;
+
+  auto sch=te::create_schedule({C->op});
+  cout << sch->stages << endl;
+  
 }

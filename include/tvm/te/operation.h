@@ -239,7 +239,7 @@ class TVM_DLL BaseComputeOpNode : public OperationNode {
   Array<IterVar> axis;
   /*! \brief IterVar on each reduction axis, if the body is a Reduce */
   Array<IterVar> reduce_axis;
-
+  Array<PrimExpr> origin_shape;
   Array<PrimExpr> out_ushape;
   Array<PrimExpr> out_eshape;
   Array<PrimExpr> in_ushape;
@@ -309,7 +309,7 @@ class ComputeOp : public Operation {
   TVM_DLL ComputeOp(std::string name, std::string tag, Map<String, ObjectRef> attrs,
                     Array<IterVar> axis, Array<PrimExpr> body);
   TVM_DLL ComputeOp(std::string name, std::string tag, Map<String, ObjectRef> attrs,
-                    Array<IterVar> axis, Array<PrimExpr> out_ushape, Array<PrimExpr> out_eshape,
+                    Array<IterVar> axis,Array<PrimExpr> shape, Array<PrimExpr> out_ushape, Array<PrimExpr> out_eshape,
                     Array<PrimExpr> in_ushape, Array<PrimExpr> in_eshape, Array<TslExpr> body);
   TVM_DEFINE_OBJECT_REF_METHODS(ComputeOp, Operation, ComputeOpNode);
 };

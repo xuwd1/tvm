@@ -107,6 +107,26 @@ Stage::Stage(Operation op) {
   data_ = std::move(n);
 }
 
+Stage::Stage(Operation op, ScheduleNode* schedptr) {
+  auto n = make_object<StageNode>();
+  n->op = op;
+  n->origin_op = op;
+  n->parent_sched = schedptr;
+  n->all_iter_vars = op->root_iter_vars();
+  // remove opaque var from leaf.
+  Array<IterVar> clean;
+  for (IterVar iv : n->all_iter_vars) {
+    if (iv->iter_type != kOpaque) clean.push_back(iv);
+  }
+  if (clean.size() == n->all_iter_vars.size()) {
+    n->leaf_iter_vars = n->all_iter_vars;
+  } else {
+    n->leaf_iter_vars = clean;
+  }
+  data_ = std::move(n);
+
+}
+
 bool Stage::is_scheduled() const {
   const StageNode* n = operator->();
   return !(n->relations.empty() && n->attach_type == kGroupRoot &&
@@ -406,13 +426,12 @@ Stage& Stage::prefetch(const Tensor& tensor, IterVar var, PrimExpr offset) {
 
 Stage& Stage::storage_align(IterVar axis, int factor, int offset) {
   StageNode* self = operator->();
-  UpdateIterVarAttr(
-      self, axis,
-      [factor, offset](IterVarAttrNode* n) {
-        n->dim_align_factor = factor;
-        n->dim_align_offset = offset;
-      },
-      false);
+  UpdateIterVarAttr(self, axis,
+                    [factor, offset](IterVarAttrNode* n) {
+                      n->dim_align_factor = factor;
+                      n->dim_align_offset = offset;
+                    },
+                    false);
   return *this;
 }
 
@@ -422,6 +441,42 @@ Stage& Stage::double_buffer() {
   self->double_buffer = true;
   return *this;
 }
+
+Stage& Stage::decompose(Array<PrimExpr> factors) {
+  StageNode* self = operator->();
+  Operation& self_op = self->op;
+  arith::Analyzer ana;
+  if (auto* origin_op = self_op.as<ComputeOpNode>()) {
+    CHECK(origin_op->origin_shape.defined()) << "Not a TslOp";
+    
+    Array<PrimExpr> origin_in_eshape = origin_op->input_elemshape(0);
+    Array<PrimExpr> origin_in_ushape = origin_op->input_unionshape(0);
+    Array<PrimExpr> origin_shape = origin_op->output_shape(0);
+    CHECK(factors.size() == origin_shape.size()) << "shape not coherent";
+
+    //generate new in u/eshape
+    Array<PrimExpr> new_in_eshape,new_in_ushape;
+    for (size_t i = 0; i < factors.size(); i++) {
+      CHECK(ana.CanProve(factors[i] < origin_in_eshape[i]))
+          << "greater decomposition factor in nested decompose not allowed";
+      new_in_eshape.push_back(ana.Simplify(factors[i]));
+      new_in_ushape.push_back(ana.Simplify(origin_shape[i] / factors[i]));
+    }
+    //stage 1: generate new traget decomposing op
+    auto new_body = Downcast<Array<TslExpr>>(origin_op->body);
+    auto new_op = ComputeOp(origin_op->name, origin_op->tag, origin_op->attrs, origin_op->axis,
+                            origin_shape, origin_op->out_ushape, origin_op->out_eshape,
+                            new_in_ushape, new_in_eshape, new_body);
+    
+    
+    
+
+  } else {
+    CHECK(0) << "Can only decompose ComputeOp";
+  }
+
+  return *this;
+}  // namespace te
 
 Stage CopyStage(const Stage& s) {
   ObjectPtr<StageNode> n = make_object<StageNode>(*s.operator->());
@@ -647,7 +702,7 @@ Schedule::Schedule(Array<Operation> ops) {
     output_set.insert(x);
   }
   for (Operation op : post_order) {
-    Stage stage(op);
+    Stage stage(op, this->operator->()); //xjx: tsl modification, let stagenode hold a scheduleNode* pointer, by this we can call createreliablereadGraph inside stage methods.
     stage->is_output = output_set.count(op) != 0;
     n->stages.push_back(stage);
     n->stage_map.Set(op, stage);

@@ -63,6 +63,8 @@ class Stage : public ObjectRef {
    * \param op The operator in the schedule
    */
   explicit Stage(Operation op);
+  //xjx add
+  explicit Stage(Operation op, ScheduleNode* schedptr);
   /*!
    * \brief access the internal node container
    * \return the pointer to the internal node container
@@ -255,6 +257,8 @@ class Stage : public ObjectRef {
    * \brief whether the stage has been scheduled.
    * \return whether the stage has been scheduled.
    */
+  TVM_DLL Stage& decompose(Array<PrimExpr> factors);
+
   bool is_scheduled() const;
   /*!
    * \brief Get attachment spec of current stage.
@@ -438,6 +442,11 @@ class IterVarAttr : public ObjectRef {
  */
 class StageNode : public Object {
  public:
+  // xjx add
+  struct DecompEntry;
+  ScheduleNode* parent_sched;
+
+
   /*!
    * \brief The operation of stage, can be different from original op.
    *  If it is null, then this stage is a group stage.
@@ -488,6 +497,19 @@ class StageNode : public Object {
   Stage group;
   /*! \brief Number of direct child stages, only used for group stage.*/
   int num_child_stages{0};
+  /*!
+   * \brief The decomposition stack
+   *  The decomp stack is used to track the hierarchy of decomposition
+   */
+  std::vector<DecompEntry> decomp_stack;
+  
+  struct DecompEntry {
+    Array<PrimExpr> factors;
+    Array<IterVar> assoc_ivars;
+    size_t level;
+    DecompEntry(Array<PrimExpr> factors, Array<IterVar> assoc_ivars, size_t level)
+        : factors(factors),assoc_ivars(assoc_ivars),level(level){}
+  };
 
   void VisitAttrs(AttrVisitor* v) {
     v->Visit("op", &op);
