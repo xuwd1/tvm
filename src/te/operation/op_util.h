@@ -79,6 +79,8 @@ Stmt ReplaceTensor(Stmt stmt, const std::unordered_map<Tensor, Tensor>& replace)
  */
 PrimExpr ReplaceTensor(PrimExpr expr, const std::unordered_map<Tensor, Tensor>& replace);
 
+
+
 /*!
  * \brief Substitute the variables of stmt by value map.
  * \param stmt the statment

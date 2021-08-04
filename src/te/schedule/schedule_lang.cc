@@ -113,18 +113,27 @@ Stage::Stage(Operation op, ScheduleNode* schedptr) {
   n->origin_op = op;
   n->parent_sched = schedptr;
   n->all_iter_vars = op->root_iter_vars();
+  Array<IterVar> root_ivars;
+  Array<IterVar> root_rivars;
+  for (auto v : n->all_iter_vars) {
+    if (v->iter_type == kCommReduce) {
+      root_rivars.push_back(v);
+    } else {
+      root_ivars.push_back(v);
+    }
+  }
+  n->decomp_stack.push_back(StageNode::DecompEntry(op->output_shape(0),root_ivars,root_rivars,{},0));
   // remove opaque var from leaf.
   Array<IterVar> clean;
   for (IterVar iv : n->all_iter_vars) {
-    if (iv->iter_type != kOpaque) clean.push_back(iv);
+      if (iv->iter_type != kOpaque) clean.push_back(iv);
   }
   if (clean.size() == n->all_iter_vars.size()) {
-    n->leaf_iter_vars = n->all_iter_vars;
+      n->leaf_iter_vars = n->all_iter_vars;
   } else {
-    n->leaf_iter_vars = clean;
+      n->leaf_iter_vars = clean;
   }
   data_ = std::move(n);
-
 }
 
 bool Stage::is_scheduled() const {
@@ -442,34 +451,137 @@ Stage& Stage::double_buffer() {
   return *this;
 }
 
+//////////////DEBUG//////////////////
+void printreadgraph(te::ReadGraph rg) {
+  for (auto kv : rg) {
+    std::cout << kv.first << ":";
+    for (auto v : kv.second) {
+      std::cout << v << ",";
+    }
+    std::cout << std::endl;
+  }
+}
+
+/////////////////DEBUG/////////////
+
+#if 0
+
 Stage& Stage::decompose(Array<PrimExpr> factors) {
   StageNode* self = operator->();
-  Operation& self_op = self->op;
+  std::cout << "DECOMPOSING:" << self->op << std::endl;
+  Operation self_op = self->op;
   arith::Analyzer ana;
   if (auto* origin_op = self_op.as<ComputeOpNode>()) {
-    CHECK(origin_op->origin_shape.defined()) << "Not a TslOp";
-    
+    CHECK(origin_op->origin_shape.defined()) << "Not a TslOp"; //TODO: decide wether this is a TslOp from attrs.
+
     Array<PrimExpr> origin_in_eshape = origin_op->input_elemshape(0);
     Array<PrimExpr> origin_in_ushape = origin_op->input_unionshape(0);
     Array<PrimExpr> origin_shape = origin_op->output_shape(0);
+    Array<IterVar> origin_axis = origin_op->axis;
     CHECK(factors.size() == origin_shape.size()) << "shape not coherent";
 
-    //generate new in u/eshape
-    Array<PrimExpr> new_in_eshape,new_in_ushape;
+    // generate new in u/eshape
+    Array<PrimExpr> new_out_eshape, new_out_ushape;
     for (size_t i = 0; i < factors.size(); i++) {
       CHECK(ana.CanProve(factors[i] < origin_in_eshape[i]))
           << "greater decomposition factor in nested decompose not allowed";
-      new_in_eshape.push_back(ana.Simplify(factors[i]));
-      new_in_ushape.push_back(ana.Simplify(origin_shape[i] / factors[i]));
+      new_out_eshape.push_back(ana.Simplify(factors[i]));
+      new_out_ushape.push_back(ana.Simplify(origin_shape[i] / factors[i]));
     }
-    //stage 1: generate new traget decomposing op
+    // stage 1: generate new traget decomposing op
+    Array<IterVar> new_axis;
+    for (size_t i = 0; i < origin_axis.size(); i++) {
+      new_axis.push_back(IterVar(Range(0, new_out_ushape[i]), origin_axis[i]->var,
+                                 origin_axis[i]->iter_type, origin_axis[i]->thread_tag));
+    }
     auto new_body = Downcast<Array<TslExpr>>(origin_op->body);
-    auto new_op = ComputeOp(origin_op->name, origin_op->tag, origin_op->attrs, origin_op->axis,
-                            origin_shape, origin_op->out_ushape, origin_op->out_eshape,
-                            new_in_ushape, new_in_eshape, new_body);
-    
-    
-    
+    auto new_op = ComputeOp(origin_op->name, origin_op->tag, origin_op->attrs, new_axis,
+                            origin_shape, new_out_ushape, new_out_eshape, origin_op->in_ushape,
+                            origin_op->out_eshape, new_body);
+
+    // stage 2: handle root itervars properly
+    // 2.1: handle stage's itervar information
+    //!!!!CURRENTLY, SHOULD ALWAYS DECOMPOSE BEFORE MAKING ANY OTHER SCHEDULING!!!
+    for (size_t i = 0; i < origin_axis.size(); i++) {
+      auto& iv = origin_axis[i];
+      auto& sugar = self->all_iter_vars;
+      size_t pos = FindNodeRef(sugar.GetArrayNode(), iv);
+      if (pos < sugar.size()) {
+        sugar.erase(sugar.begin() + pos);
+        sugar.insert(sugar.begin() + pos, new_axis[i]);
+      } else {
+        LOG(FATAL);
+      }
+      auto& sugar = self->leaf_iter_vars;
+      size_t pos = FindNodeRef(sugar.GetArrayNode(), iv);
+      if (pos < sugar.size()) {
+        sugar.erase(sugar.begin() + pos);
+        sugar.insert(sugar.begin() + pos, new_axis[i]);
+      } else {
+        LOG(FATAL);
+      }
+    }
+    // do stack operations and make splits when stack depth is greater than 0(indicating the tensor
+    // have been decomped at least once)
+    if (self->decomp_stack.size() == 0) {
+      StageNode::DecompEntry(factors, new)
+    }
+
+    // TODO:
+    // 1.need to expand axis extents. for this a mutator for traversing the expr tree and replacing
+    // itervars are needed! 2.need to update itervar related information afterward. 3.make splits
+    // 4.push decomp stack
+
+    self->op = new_op;
+
+    auto readgraph = CreateReadGraph(self->parent_sched->outputs);
+    auto feedgraph = CreateFeedGraph(readgraph);
+    // 1.1 replace reader's input tensor
+    te::Tensor origin_tensor = self_op.output(0);
+    te::Tensor new_tensor = new_op.output(0);
+    if (feedgraph.find(origin_tensor) != feedgraph.end()) {
+      auto readers = feedgraph.at(origin_tensor);
+      std::unordered_map<Tensor, Tensor> vsub;
+      vsub[origin_tensor] = new_tensor;
+      std::unordered_map<Tensor, Tensor> vmap;
+      std::unordered_map<Tensor, Tensor> rvmap;
+      for (Operation op : readers) {
+        Stage s = operator->()->parent_sched->stage_map[op];
+        Operation repl_op = s->op->ReplaceInputs(s->op, vsub);
+        CHECK(!repl_op.same_as(s->op))
+            << "Cannot find " << origin_tensor << " in the inputs of " << s->op;
+        vmap[s->op.output(0)] = repl_op.output(0);
+        rvmap[repl_op.output(0)] = s->op.output(0);
+        s->op = repl_op;
+      }
+    }
+
+    /*
+    for (auto kv : feedgraph) {
+      std::cout << kv.first << ":";
+      for (auto v : kv.second) {
+        std::cout << v << ",";
+      }
+      std::cout << std::endl;
+        
+
+
+    }
+    std::cout << (feedgraph.find(self_op->InputTensors()[0])!=feedgraph.end()) << std::endl;
+    std::cout << (feedgraph.find(self_op.output(0)) != feedgraph.end()) << std::endl;*/
+
+    readgraph = CreateReliableReadGraph(self->parent_sched);
+    std::cout << "////////////////////////////" << std::endl;
+    printreadgraph(readgraph);
+
+    Array<Operation> updated_outputs;
+    for (auto& v : self->parent_sched->outputs) {
+      updated_outputs.push_back(self->parent_sched->stage_map[v]->op);
+    }
+    auto postdfs = PostDFSOrder(updated_outputs, readgraph);
+    for (auto& v : postdfs) {
+      std::cout << v.output(0) << std::endl;
+    }
 
   } else {
     CHECK(0) << "Can only decompose ComputeOp";
@@ -477,6 +589,8 @@ Stage& Stage::decompose(Array<PrimExpr> factors) {
 
   return *this;
 }  // namespace te
+
+#endif
 
 Stage CopyStage(const Stage& s) {
   ObjectPtr<StageNode> n = make_object<StageNode>(*s.operator->());
@@ -702,7 +816,10 @@ Schedule::Schedule(Array<Operation> ops) {
     output_set.insert(x);
   }
   for (Operation op : post_order) {
-    Stage stage(op, this->operator->()); //xjx: tsl modification, let stagenode hold a scheduleNode* pointer, by this we can call createreliablereadGraph inside stage methods.
+    Stage stage(
+        op,
+        this->operator->());  // xjx: tsl modification, let stagenode hold a scheduleNode* pointer,
+                              // by this we can call createreliablereadGraph inside stage methods.
     stage->is_output = output_set.count(op) != 0;
     n->stages.push_back(stage);
     n->stage_map.Set(op, stage);

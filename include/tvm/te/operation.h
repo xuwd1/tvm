@@ -224,8 +224,10 @@ class PlaceholderOpNode : public OperationNode {
 class PlaceholderOp : public Operation {
  public:
   TVM_DLL PlaceholderOp(std::string name, Array<PrimExpr> shape, DataType dtype);
-
+  TVM_DLL PlaceholderOp(std::string name, Array<PrimExpr> shape, DataType dtype,
+                        Map<String, ObjectRef> attrs);
   TVM_DEFINE_OBJECT_REF_METHODS(PlaceholderOp, Operation, PlaceholderOpNode);
+  
 };
 
 /*!
@@ -276,6 +278,9 @@ class TVM_DLL ComputeOpNode : public BaseComputeOpNode {
   Array<Tensor> InputTensors() const final;
   Operation ReplaceInputs(const Operation& self,
                           const std::unordered_map<Tensor, Tensor>& rmap) const final;
+  //xjx added: used only for tsl
+  Operation ReplaceIterVars(const Operation& self,
+                            const std::unordered_map<IterVar, IterVar>& rmap) const;
   void PropBoundToInputs(const Operation& self, arith::Analyzer* analyzer,
                          const std::unordered_map<const VarNode*, IntSet>& dom_map,
                          std::unordered_map<Tensor, TensorDom>* out_dom_map) const final;
@@ -639,7 +644,8 @@ using FBatchCompute = std::function<Array<PrimExpr>(const Array<Var>& i)>;
  */
 TVM_DLL Tensor placeholder(Array<PrimExpr> shape, DataType dtype = DataType::Float(32),
                            std::string name = "placeholder");
-
+TVM_DLL Tensor Tslplaceholder(Array<PrimExpr> shape, DataType dtype = DataType::Float(32),
+                           std::string name = "tslplaceholder");
 /*!
  * \brief Construct a new tensor by computing over shape,
  *  using the computation rule: result_tensor[axis] = fcompute(axis)

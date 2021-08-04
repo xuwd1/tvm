@@ -304,6 +304,9 @@ class TVM_DLL ExprMutator : protected ExprFunctor<PrimExpr(const PrimExpr&)> {
   PrimExpr VisitExpr_(const FloatImmNode* op) override;
   PrimExpr VisitExpr_(const StringImmNode* op) override;
   PrimExpr VisitExpr_(const AnyNode* op) override;
+  //TslExprs
+  PrimExpr VisitExpr_(const TslProducerLoadNode* op);
+  PrimExpr VisitExpr_(const TslAddNode* op);
 };
 
 }  // namespace tir

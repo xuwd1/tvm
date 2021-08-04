@@ -309,6 +309,38 @@ PrimExpr ExprMutator::VisitExpr_(const ShuffleNode* op) {
     return Shuffle(vectors, op->indices);
   }
 }
+//TslExprs
+
+#define DEFINE_TSL_RUNTIME_DOWNCAST_ENTRY(ARG, OP) \
+  if (ARG->IsInstance<OP##Node>()) {               \
+    return Downcast<OP>(ARG);                      \
+  }
+
+TslExpr TslRuntimeDowncast(PrimExpr x) {
+  DEFINE_TSL_RUNTIME_DOWNCAST_ENTRY(x, TslAdd);
+  DEFINE_TSL_RUNTIME_DOWNCAST_ENTRY(x, TslProducerLoad);
+}
+
+PrimExpr ExprMutator::VisitExpr_(const TslProducerLoadNode* op) {
+  auto fmutate = [this](const PrimExpr& e) { return this->VisitExpr(e); };
+  Array<PrimExpr> indices = MutateArray(op->indices, fmutate);
+  if (indices.same_as(op->indices)) {
+    return GetRef<PrimExpr>(op);
+  } else {
+    return TslProducerLoad(op->producer, indices);
+  }
+}
+
+PrimExpr ExprMutator::VisitExpr_(const TslAddNode* op) {
+  PrimExpr a = this->VisitExpr(op->a);
+  PrimExpr b = this->VisitExpr(op->b);
+  if (a.same_as(op->a) && b.same_as(op->b)) {
+    return GetRef<PrimExpr>(op);
+  } else {
+    return TslAdd(TslRuntimeDowncast(a), TslRuntimeDowncast(b));
+  }
+}
+
 
 }  // namespace tir
 }  // namespace tvm

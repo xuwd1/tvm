@@ -70,7 +70,6 @@ Array<IterVar> BaseComputeOpNode::root_iter_vars() const {
   }
   return ret;
 }
-
 DataType ComputeOpNode::output_dtype(size_t idx) const {
   CHECK_LT(idx, num_outputs());
   return body[idx].dtype();
@@ -122,7 +121,7 @@ Tensor compute(Array<PrimExpr> shape, TSLCompute fcompute, std::string name, std
     //关于这个函数：其应当返回一个设置了axis长度都是1，但in/out的e/ushape都初始化为shape/1的op,因此去改compute的构造函数！
     //另外考虑加一个吧tensor直接变成Tslexpr的类型转换函数，这样就比较优雅，TSLCompute就可以是TslExpr了！
   }
-  return ComputeOp(name, tag, attrs, axis,shape, Array<PrimExpr>(ndim, 1), shape,
+  return ComputeOp(name, tag, attrs, axis, shape, Array<PrimExpr>(ndim, 1), shape,
                    Array<PrimExpr>(ndim, 1), shape, {fcompute(args)})
       .output(0);
 }
@@ -173,8 +172,9 @@ TVM_REGISTER_GLOBAL("te.ComputeOp")
                        Array<PrimExpr> body) { return ComputeOp(name, tag, attrs, axis, body); });
 
 ComputeOp::ComputeOp(std::string name, std::string tag, Map<String, ObjectRef> attrs,
-                     Array<IterVar> axis, Array<PrimExpr> shape, Array<PrimExpr> out_ushape, Array<PrimExpr> out_eshape,
-                     Array<PrimExpr> in_ushape, Array<PrimExpr> in_eshape, Array<TslExpr> body) {
+                     Array<IterVar> axis, Array<PrimExpr> shape, Array<PrimExpr> out_ushape,
+                     Array<PrimExpr> out_eshape, Array<PrimExpr> in_ushape,
+                     Array<PrimExpr> in_eshape, Array<TslExpr> body) {
   if (!attrs.defined()) {
     attrs = Map<String, ObjectRef>();
   }
@@ -215,18 +215,16 @@ Array<Tensor> ComputeOpNode::InputTensors() const {
   std::unordered_set<Tensor> visited;
   for (auto& e : body) {
     tir::PostOrderVisit(e, [&ret, &visited](const ObjectRef& n) {
-      if (auto* pload = n.as  <tir::ProducerLoadNode>()) {
+      if (auto* pload = n.as<tir::ProducerLoadNode>()) {
         Tensor t = Downcast<Tensor>(pload->producer);
         if (!visited.count(t)) {
           ret.push_back(t);
           visited.insert(t);
         }
       }
-      if (auto* pload = n.as<tir::TslProducerLoadNode>())
-      {
+      if (auto* pload = n.as<tir::TslProducerLoadNode>()) {
         Tensor t = Downcast<Tensor>(pload->producer);
-        if (!visited.count(t)) 
-        {
+        if (!visited.count(t)) {
           ret.push_back(t);
           visited.insert(t);
         }
@@ -261,11 +259,19 @@ Operation ComputeOpNode::ReplaceInputs(const Operation& self,
         UpdateArray(this->body, [&rmap](const PrimExpr& e) { return te::ReplaceTensor(e, rmap); });
   }
   if (!arr.same_as(this->body)) {
-    return ComputeOp(this->name, this->tag, this->attrs, this->axis, arr);
+    if (this->origin_shape.defined()) {
+      return ComputeOp(this->name, this->tag, this->attrs, this->axis, this->origin_shape,
+                       this->out_ushape, this->out_eshape, this->in_ushape, this->in_eshape,
+                       Downcast<Array<TslExpr>>(arr));
+    } else {
+      return ComputeOp(this->name, this->tag, this->attrs, this->axis, arr);
+    }   
   } else {
     return self;
   }
 }
+
+
 
 void ComputeOpNode::PropBoundToInputs(const Operation& self, arith::Analyzer* analyzer,
                                       const std::unordered_map<const VarNode*, IntSet>& dom_map,

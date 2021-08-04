@@ -425,218 +425,6 @@ class IterVarAttr : public ObjectRef {
   inline const IterVarAttrNode* operator->() const;
 };
 
-/*!
- * \brief represents a stage.
- *
- *  relations form a Directed acylic hypergraph in bipartite manner.
- *  With each node is represented by a IterVar,
- *  and each hyper-edge is represented by a IterVarRelation.
- *  The relations connects the IterVars in the graph.
- *
- *  Besides typical stage that corresponds to operations.
- *  There is also group stage, which groups stages together.
- *  Each stage's group(given by group) represent an constraint,
- *  the stage can only be attached to stages within the group.
- *
- *  The group stage node can be attached to IterVars as in normal stage.
- */
-class StageNode : public Object {
- public:
-  // xjx add
-  struct DecompEntry;
-  ScheduleNode* parent_sched;
-
-
-  /*!
-   * \brief The operation of stage, can be different from original op.
-   *  If it is null, then this stage is a group stage.
-   */
-  Operation op;
-  /*!
-   * \brief The original operator.
-   *  The op field can change during schedule to alternate the dataflow,
-   *  while origin_op remains fixed.
-   */
-  Operation origin_op;
-  /*! \brief All the nodes in the iter var */
-  Array<IterVar> all_iter_vars;
-  /*! \brief The current active leaf iter vars in the stage. */
-  Array<IterVar> leaf_iter_vars;
-  /*!
-   * \brief Specify threads to be launched at the stage.
-   *  This is only valid for composite ops such as Scan.
-   * \note Experimental primitive: used for thread persistence.
-   */
-  Array<IterVar> env_threads;
-  /*!
-   * \brief The predicate under which store can happen
-   *  Use this when there can be duplicated threads doing the same store.
-   * \note Experimental primitive: used by cross thread-reduction.
-   */
-  PrimExpr store_predicate;
-  /*! \brief The relation bwteen of IterVars */
-  Array<IterVarRelation> relations;
-  /*! \brief additional attributes about iter var. */
-  Map<IterVar, IterVarAttr> iter_var_attrs;
-  /*! \brief The attachment type of the schedule */
-  AttachType attach_type{kGroupRoot};
-  /*! \brief The attach point of this schedule. */
-  IterVar attach_ivar;
-  /*! \brief The stage this node attaches to */
-  Stage attach_stage;
-  /*! \brief The thread storage scope level of the stage */
-  std::string scope;
-  /*! \brief Whether this is an output stage */
-  bool is_output{false};
-  /*! \brief Whether apply double buffer optimization to this stage */
-  bool double_buffer{false};
-  /*!
-   * \brief The parent group of the current stage.
-   *  The stage cannot be assigned to stages outside the group.
-   */
-  Stage group;
-  /*! \brief Number of direct child stages, only used for group stage.*/
-  int num_child_stages{0};
-  /*!
-   * \brief The decomposition stack
-   *  The decomp stack is used to track the hierarchy of decomposition
-   */
-  std::vector<DecompEntry> decomp_stack;
-  
-  struct DecompEntry {
-    Array<PrimExpr> factors;
-    Array<IterVar> assoc_ivars;
-    size_t level;
-    DecompEntry(Array<PrimExpr> factors, Array<IterVar> assoc_ivars, size_t level)
-        : factors(factors),assoc_ivars(assoc_ivars),level(level){}
-  };
-
-  void VisitAttrs(AttrVisitor* v) {
-    v->Visit("op", &op);
-    v->Visit("origin_op", &origin_op);
-    v->Visit("all_iter_vars", &all_iter_vars);
-    v->Visit("leaf_iter_vars", &leaf_iter_vars);
-    v->Visit("env_threads", &env_threads);
-    v->Visit("relations", &relations);
-    v->Visit("iter_var_attrs", &iter_var_attrs);
-    v->Visit("attach_type", &attach_type);
-    v->Visit("attach_ivar", &attach_ivar);
-    v->Visit("attach_stage", &attach_stage);
-    v->Visit("scope", &scope);
-    v->Visit("is_output", &is_output);
-    v->Visit("double_buffer", &double_buffer);
-    v->Visit("group", &group);
-    v->Visit("num_child_stages", &num_child_stages);
-  }
-
-  static constexpr const char* _type_key = "Stage";
-  TVM_DECLARE_FINAL_OBJECT_INFO(StageNode, Object);
-};
-
-/*! \brief node container for schedule */
-class ScheduleNode : public Object {
- public:
-  /*! \brief The output operations in original data flow graph */
-  Array<Operation> outputs;
-  /*!
-   * \brief list of all stages for ops.
-   * The stages are sorted in dependency order.
-   */
-  Array<Stage> stages;
-  /*!
-   * \brief List of all stage groups.
-   */
-  Array<Stage> groups;
-  /*! \brief map of original operation to the stages */
-  Map<Operation, Stage> stage_map;
-  /*!
-   * \brief Internal stage map to map internal ops to stages.
-   *  This is created on demand and can be invalidated.
-   */
-  std::unordered_map<const Object*, Stage> op2stage_cache_;
-
-  void VisitAttrs(AttrVisitor* v) {
-    v->Visit("outputs", &outputs);
-    v->Visit("stages", &stages);
-    v->Visit("groups", &groups);
-    v->Visit("stage_map", &stage_map);
-  }
-
-  /*! \brief Initialize temp cache. */
-  void InitCache();
-  /*! \brief Invalidate temp cache. */
-  void InvalidateCache();
-
-  /*!
-   * \brief Check if the schedule contains an Operation.
-   * \param op The candidate Operation.
-   * \return true if the schedule has the Operation. Otherwise, false.
-   */
-  TVM_DLL bool Contain(const Operation& op) const;
-
-  /*!
-   * \brief Check if the schedule contains a Tensor.
-   * \param tensor The candidate tensor.
-   * \return true if the schedule has the tensor. Otherwise, false.
-   */
-  TVM_DLL bool Contain(const Tensor& tensor) const { return Contain(tensor->op); }
-
-  static constexpr const char* _type_key = "Schedule";
-  TVM_DECLARE_FINAL_OBJECT_INFO(ScheduleNode, Object);
-};
-
-/*!
- * \brief Create a schedule for array of ops(and their dependencies).
- * \param ops The ops to be scheduled.
- * \return sch The created Schedule.
- */
-inline Schedule create_schedule(Array<Operation> ops) { return Schedule(ops); }
-
-/*! \brief node container for IterVar attr */
-class IterVarAttrNode : public Object {
- public:
-  /*! \brief The iteration type. */
-  IterVarType iter_type{kDataPar};
-  /*! \brief The thread this iter Var binds, can be null */
-  IterVar bind_thread;
-  /*! \brief List of tensor to be prefetched in this loop */
-  Array<Tensor> prefetch_data;
-  /*! \brief The offset used in each prefetch */
-  Array<PrimExpr> prefetch_offset;
-  /*!
-   * \brief Tensor intrinsic used in tensorization,
-   *   when the axis is marked as Tensorized
-   */
-  TensorIntrin tensor_intrin;
-  /*! \brief Alignment factor of buffer dimension */
-  int dim_align_factor{0};
-  /*! \brief Alignment offset of buffer dimension */
-  int dim_align_offset{0};
-  /*!
-   * \brief Additional pragma keys, array of StringImm
-   */
-  Array<PrimExpr> pragma_keys;
-  /*!
-   * \brief Additional values of pragma, if any
-   */
-  Array<PrimExpr> pragma_values;
-
-  void VisitAttrs(AttrVisitor* v) {
-    v->Visit("iter_type", &iter_type);
-    v->Visit("bind_thread", &bind_thread);
-    v->Visit("prefetch_data", &prefetch_data);
-    v->Visit("prefetch_offset", &prefetch_offset);
-    v->Visit("tensor_intrin", &tensor_intrin);
-    v->Visit("dim_align_factor", &dim_align_factor);
-    v->Visit("dim_align_offset", &dim_align_offset);
-    v->Visit("pragma_keys", &pragma_keys);
-    v->Visit("pragma_values", &pragma_values);
-  }
-
-  static constexpr const char* _type_key = "IterVarAttr";
-  TVM_DECLARE_FINAL_OBJECT_INFO(IterVarAttrNode, Object);
-};
-
 /*! \brief base node of iteration var */
 class IterVarRelationNode : public Object {
  public:
@@ -818,6 +606,224 @@ class SpecializedCondition : public ObjectRef {
   TVM_DLL void EnterWithScope();
   /*! \brief Pop a specialized condition off the thread local context stack. */
   TVM_DLL void ExitWithScope();
+};
+
+
+
+
+/*!
+ * \brief represents a stage.
+ *
+ *  relations form a Directed acylic hypergraph in bipartite manner.
+ *  With each node is represented by a IterVar,
+ *  and each hyper-edge is represented by a IterVarRelation.
+ *  The relations connects the IterVars in the graph.
+ *
+ *  Besides typical stage that corresponds to operations.
+ *  There is also group stage, which groups stages together.
+ *  Each stage's group(given by group) represent an constraint,
+ *  the stage can only be attached to stages within the group.
+ *
+ *  The group stage node can be attached to IterVars as in normal stage.
+ */
+class StageNode : public Object {
+ public:
+  // xjx add
+  struct DecompEntry;
+  ScheduleNode* parent_sched;
+
+
+  /*!
+   * \brief The operation of stage, can be different from original op.
+   *  If it is null, then this stage is a group stage.
+   */
+  Operation op;
+  /*!
+   * \brief The original operator.
+   *  The op field can change during schedule to alternate the dataflow,
+   *  while origin_op remains fixed.
+   */
+  Operation origin_op;
+  /*! \brief All the nodes in the iter var */
+  Array<IterVar> all_iter_vars;
+  /*! \brief The current active leaf iter vars in the stage. */
+  Array<IterVar> leaf_iter_vars;
+  /*!
+   * \brief Specify threads to be launched at the stage.
+   *  This is only valid for composite ops such as Scan.
+   * \note Experimental primitive: used for thread persistence.
+   */
+  Array<IterVar> env_threads;
+  /*!
+   * \brief The predicate under which store can happen
+   *  Use this when there can be duplicated threads doing the same store.
+   * \note Experimental primitive: used by cross thread-reduction.
+   */
+  PrimExpr store_predicate;
+  /*! \brief The relation bwteen of IterVars */
+  Array<IterVarRelation> relations;
+  /*! \brief additional attributes about iter var. */
+  Map<IterVar, IterVarAttr> iter_var_attrs;
+  /*! \brief The attachment type of the schedule */
+  AttachType attach_type{kGroupRoot};
+  /*! \brief The attach point of this schedule. */
+  IterVar attach_ivar;
+  /*! \brief The stage this node attaches to */
+  Stage attach_stage;
+  /*! \brief The thread storage scope level of the stage */
+  std::string scope;
+  /*! \brief Whether this is an output stage */
+  bool is_output{false};
+  /*! \brief Whether apply double buffer optimization to this stage */
+  bool double_buffer{false};
+  /*!
+   * \brief The parent group of the current stage.
+   *  The stage cannot be assigned to stages outside the group.
+   */
+  Stage group;
+  /*! \brief Number of direct child stages, only used for group stage.*/
+  int num_child_stages{0};
+  /*!
+   * \brief The decomposition stack
+   *  The decomp stack is used to track the hierarchy of decomposition
+   */
+  std::vector<DecompEntry> decomp_stack;
+  
+  struct DecompEntry {
+    Array<PrimExpr> factors;
+    Array<IterVar> left_ivars;
+    Array<IterVar> left_rivars;
+    Array<Split> split_relations;
+    size_t level;
+    DecompEntry(Array<PrimExpr> factors, Array<IterVar> left_ivars, Array<IterVar> left_rivars,
+                Array<Split> split_relations, size_t level)
+        : factors(factors),left_ivars(left_ivars),left_rivars(left_rivars),level(level){}
+  };
+
+  void VisitAttrs(AttrVisitor* v) {
+    v->Visit("op", &op);
+    v->Visit("origin_op", &origin_op);
+    v->Visit("all_iter_vars", &all_iter_vars);
+    v->Visit("leaf_iter_vars", &leaf_iter_vars);
+    v->Visit("env_threads", &env_threads);
+    v->Visit("relations", &relations);
+    v->Visit("iter_var_attrs", &iter_var_attrs);
+    v->Visit("attach_type", &attach_type);
+    v->Visit("attach_ivar", &attach_ivar);
+    v->Visit("attach_stage", &attach_stage);
+    v->Visit("scope", &scope);
+    v->Visit("is_output", &is_output);
+    v->Visit("double_buffer", &double_buffer);
+    v->Visit("group", &group);
+    v->Visit("num_child_stages", &num_child_stages);
+  }
+
+  static constexpr const char* _type_key = "Stage";
+  TVM_DECLARE_FINAL_OBJECT_INFO(StageNode, Object);
+};
+
+/*! \brief node container for schedule */
+class ScheduleNode : public Object {
+ public:
+  /*! \brief The output operations in original data flow graph */
+  Array<Operation> outputs;
+  /*!
+   * \brief list of all stages for ops.
+   * The stages are sorted in dependency order.
+   */
+  Array<Stage> stages;
+  /*!
+   * \brief List of all stage groups.
+   */
+  Array<Stage> groups;
+  /*! \brief map of original operation to the stages */
+  Map<Operation, Stage> stage_map;
+  /*!
+   * \brief Internal stage map to map internal ops to stages.
+   *  This is created on demand and can be invalidated.
+   */
+  std::unordered_map<const Object*, Stage> op2stage_cache_;
+
+  void VisitAttrs(AttrVisitor* v) {
+    v->Visit("outputs", &outputs);
+    v->Visit("stages", &stages);
+    v->Visit("groups", &groups);
+    v->Visit("stage_map", &stage_map);
+  }
+
+  /*! \brief Initialize temp cache. */
+  void InitCache();
+  /*! \brief Invalidate temp cache. */
+  void InvalidateCache();
+
+  /*!
+   * \brief Check if the schedule contains an Operation.
+   * \param op The candidate Operation.
+   * \return true if the schedule has the Operation. Otherwise, false.
+   */
+  TVM_DLL bool Contain(const Operation& op) const;
+
+  /*!
+   * \brief Check if the schedule contains a Tensor.
+   * \param tensor The candidate tensor.
+   * \return true if the schedule has the tensor. Otherwise, false.
+   */
+  TVM_DLL bool Contain(const Tensor& tensor) const { return Contain(tensor->op); }
+
+  static constexpr const char* _type_key = "Schedule";
+  TVM_DECLARE_FINAL_OBJECT_INFO(ScheduleNode, Object);
+};
+
+/*!
+ * \brief Create a schedule for array of ops(and their dependencies).
+ * \param ops The ops to be scheduled.
+ * \return sch The created Schedule.
+ */
+inline Schedule create_schedule(Array<Operation> ops) { return Schedule(ops); }
+
+/*! \brief node container for IterVar attr */
+class IterVarAttrNode : public Object {
+ public:
+  /*! \brief The iteration type. */
+  IterVarType iter_type{kDataPar};
+  /*! \brief The thread this iter Var binds, can be null */
+  IterVar bind_thread;
+  /*! \brief List of tensor to be prefetched in this loop */
+  Array<Tensor> prefetch_data;
+  /*! \brief The offset used in each prefetch */
+  Array<PrimExpr> prefetch_offset;
+  /*!
+   * \brief Tensor intrinsic used in tensorization,
+   *   when the axis is marked as Tensorized
+   */
+  TensorIntrin tensor_intrin;
+  /*! \brief Alignment factor of buffer dimension */
+  int dim_align_factor{0};
+  /*! \brief Alignment offset of buffer dimension */
+  int dim_align_offset{0};
+  /*!
+   * \brief Additional pragma keys, array of StringImm
+   */
+  Array<PrimExpr> pragma_keys;
+  /*!
+   * \brief Additional values of pragma, if any
+   */
+  Array<PrimExpr> pragma_values;
+
+  void VisitAttrs(AttrVisitor* v) {
+    v->Visit("iter_type", &iter_type);
+    v->Visit("bind_thread", &bind_thread);
+    v->Visit("prefetch_data", &prefetch_data);
+    v->Visit("prefetch_offset", &prefetch_offset);
+    v->Visit("tensor_intrin", &tensor_intrin);
+    v->Visit("dim_align_factor", &dim_align_factor);
+    v->Visit("dim_align_offset", &dim_align_offset);
+    v->Visit("pragma_keys", &pragma_keys);
+    v->Visit("pragma_values", &pragma_values);
+  }
+
+  static constexpr const char* _type_key = "IterVarAttr";
+  TVM_DECLARE_FINAL_OBJECT_INFO(IterVarAttrNode, Object);
 };
 
 // implementations

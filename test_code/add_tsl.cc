@@ -38,8 +38,10 @@ int main() {
   auto immadd = imm1 + imm2;
   cout << ana.Simplify(immadd) << endl;
   
-  te::Tensor A = te::placeholder({M, N}, DataType::Float(32), "A");
+  te::Tensor A = te::Tslplaceholder({M, N}, DataType::Float(32), "A");
   te::Tensor B = te::placeholder({M, N}, DataType::Float(32), "B");
+  te::Tensor X = te::placeholder({M, N}, DataType::Float(32), "X");
+  te::Tensor Y = te::placeholder({M, N}, DataType::Float(32), "Y");
   cout << A << endl;
   cout << B << endl;
 
@@ -62,7 +64,20 @@ int main() {
   cout << C << endl;
   cout << C->op->InputTensors() << endl;
 
-  auto sch=te::create_schedule({C->op});
+  te::Tensor D = te::compute(
+      {M, N}, std::function<te::TslExpr(tir::Var, tir::Var)>([=](tir::Var i, tir::Var j) {
+    return te::TslAdd(C.TslPLoad({i, j}), X.TslPLoad({i, j}));
+  }),"tsladd(X,(A+B))");
+  te::Tensor E = te::compute(
+      {M, N}, std::function<te::TslExpr(tir::Var, tir::Var)>([=](tir::Var i, tir::Var j) {
+        return te::TslAdd(D.TslPLoad({i, j}), Y.TslPLoad({i, j}));
+      }),
+      "tsladd(Y,(A+B+X))");
+
+  auto sch=te::create_schedule({E->op});
   cout << sch->stages << endl;
+  //sch[D].decompose({32, 32});
+
+  
   
 }

@@ -215,6 +215,19 @@ class TensorReplacer : public tir::StmtExprMutator {
       return expr;
     }
   }
+  PrimExpr VisitExpr_(const tir::TslProducerLoadNode* op) final {
+    PrimExpr expr = StmtExprMutator::VisitExpr_(op);
+    op = expr.as<tir::TslProducerLoadNode>();
+    CHECK(op != nullptr);
+    Tensor t = Downcast<Tensor>(op->producer);
+    auto it = vmap_.find(t);
+    if (it != vmap_.end()) {
+      found = true;
+      return tir::TslProducerLoad(it->second, op->indices);
+    } else {
+      return Downcast<tir::TslProducerLoad>( expr);
+    }
+  }
 
   // whether it is found.
   bool found{false};
@@ -233,6 +246,8 @@ PrimExpr ReplaceTensor(PrimExpr expr, const std::unordered_map<Tensor, Tensor>& 
   PrimExpr ret = repl(expr);
   return repl.found ? ret : expr;
 }
+
+
 
 Stmt Substitute(Stmt s, const std::unordered_map<IterVar, PrimExpr>& value_map) {
   std::unordered_map<const VarNode*, PrimExpr> init;

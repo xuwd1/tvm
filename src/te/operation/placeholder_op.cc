@@ -54,14 +54,31 @@ PlaceholderOp::PlaceholderOp(std::string name, Array<PrimExpr> shape, DataType d
   auto n = make_object<PlaceholderOpNode>();
   n->name = name;
   n->shape = shape;
+  n->dtype = dtype;
+  data_ = std::move(n);
+}
+
+PlaceholderOp::PlaceholderOp(std::string name, Array<PrimExpr> shape, DataType dtype,
+  Map<String, ObjectRef> attrs) {
+  CHECK(attrs.find("TslOp") != attrs.end()) << "\" TslOp \" not in attrs";
+  auto n = make_object<PlaceholderOpNode>();
+  n->name = name;
+  n->shape = shape;
+  n->dtype = dtype;
+  n->attrs = attrs;
   n->out_eshape = shape;
   n->out_ushape = Array<PrimExpr>(shape.size(), 1);
-  n->dtype = dtype;
   data_ = std::move(n);
 }
 
 Tensor placeholder(Array<PrimExpr> shape, DataType dtype, std::string name) {
   return PlaceholderOp(name, shape, dtype).output(0);
+}
+
+Tensor Tslplaceholder(Array<PrimExpr> shape, DataType dtype, std::string name) {
+  Map<String, ObjectRef> attrs;
+  attrs.Set("TslOp", Bool(1));
+  return PlaceholderOp(name, shape, dtype, attrs).output(0);
 }
 
 TVM_REGISTER_GLOBAL("te.Placeholder")
