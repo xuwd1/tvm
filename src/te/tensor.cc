@@ -71,10 +71,12 @@ Tensor Operation::output(size_t i) const {
   node->value_index = i;
   node->dtype = (*this)->output_dtype(i);
   node->shape = (*this)->output_shape(i);
-  node->write_ushape = (*this)->output_unionshape(i);
-  node->write_eshape = (*this)->output_elemshape(i);
-  node->read_ushape = Array<PrimExpr>(node->shape.size(), 1);
-  node->read_eshape = (*this)->output_shape(i);
+  if (this->operator->()->attrs.count("TslOp") != 0) {
+    node->write_ushape = (*this)->output_unionshape(i);
+    node->write_eshape = (*this)->output_elemshape(i);
+    node->read_ushape = Array<PrimExpr>(node->shape.size(), 1);
+    node->read_eshape = (*this)->output_shape(i);
+  }
   return Tensor(node);
 }
 

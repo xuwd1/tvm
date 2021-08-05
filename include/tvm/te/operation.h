@@ -717,8 +717,8 @@ inline Tensor compute(Array<PrimExpr> shape, std::function<PrimExpr(Var, Var, Va
 }
 
 // xjx added
-inline Tensor compute(Array<PrimExpr> shape, std::function<TslExpr(Var)> f, std::string name = "tensor",
-                      std::string tag = "", Map<String, ObjectRef> attrs = {}) {
+inline Tensor compute(Array<PrimExpr> shape, std::function<TslExpr(Var)> f, std::string name = "tensor", std::string tag = "",
+                      Map<String, ObjectRef> attrs = {}) {
   TSLCompute fc = [f](const Array<Var>& i) { return f(i[0]); };
   return compute(shape, fc, name, tag, attrs);
 }

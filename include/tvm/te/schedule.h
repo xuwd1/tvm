@@ -692,12 +692,13 @@ class StageNode : public Object {
   struct DecompEntry {
     Array<PrimExpr> factors;
     Array<IterVar> left_ivars;
-    Array<IterVar> left_rivars;
+    Array<IterVar> right_ivars;
     Array<Split> split_relations;
-    size_t level;
-    DecompEntry(Array<PrimExpr> factors, Array<IterVar> left_ivars, Array<IterVar> left_rivars,
+    size_t level{0};
+    DecompEntry() = default;
+    DecompEntry(Array<PrimExpr> factors, Array<IterVar> left_ivars, Array<IterVar> right_ivars,
                 Array<Split> split_relations, size_t level)
-        : factors(factors),left_ivars(left_ivars),left_rivars(left_rivars),level(level){}
+        : factors(factors),left_ivars(left_ivars),right_ivars(right_ivars),level(level){}
   };
 
   void VisitAttrs(AttrVisitor* v) {

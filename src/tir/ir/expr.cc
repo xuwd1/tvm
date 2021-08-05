@@ -87,6 +87,18 @@ Var Var::copy_with_suffix(const String& suffix) const {
   return Var(new_ptr);
 }
 
+TVM_DLL Var Var::copy_with_namehint(const String& namehint) const {
+  const VarNode* node = get();
+  ObjectPtr<VarNode> new_ptr;
+  if (auto* ptr = this->as<SizeVarNode>()) {
+    new_ptr = make_object<SizeVarNode>(*ptr);
+  } else {
+    new_ptr = make_object<VarNode>(*node);
+  }
+  new_ptr->name_hint = namehint;
+  return Var(new_ptr);
+}
+
 TVM_REGISTER_GLOBAL("tir.Var").set_body_typed([](String name_hint, runtime::TVMArgValue type) {
   if (type.IsObjectRef<Type>()) {
     return Var(name_hint, type.operator Type());

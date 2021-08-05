@@ -39,9 +39,9 @@ int main() {
   cout << ana.Simplify(immadd) << endl;
   
   te::Tensor A = te::Tslplaceholder({M, N}, DataType::Float(32), "A");
-  te::Tensor B = te::placeholder({M, N}, DataType::Float(32), "B");
-  te::Tensor X = te::placeholder({M, N}, DataType::Float(32), "X");
-  te::Tensor Y = te::placeholder({M, N}, DataType::Float(32), "Y");
+  te::Tensor B = te::Tslplaceholder({M, N}, DataType::Float(32), "B");
+  te::Tensor X = te::Tslplaceholder({M, N}, DataType::Float(32), "X");
+  te::Tensor Y = te::Tslplaceholder({M, N}, DataType::Float(32), "Y");
   cout << A << endl;
   cout << B << endl;
 
@@ -50,19 +50,19 @@ int main() {
         return te::TslAdd(A.TslPLoad({i, j}), B.TslPLoad({i, j}));
       }),"tsladd(A,B)");
 
-  auto C_op = C->op;
-  auto C_computeNode = *C_op.as<te::ComputeOpNode>();
-  cout << C_computeNode.in_eshape << endl;
-  cout << C_computeNode.in_ushape << endl;
-  cout << C_computeNode.out_eshape << endl;
-  cout << C_computeNode.out_ushape << endl;
-  cout << C_computeNode.input_elemshape(0) << endl;
-  cout << C_computeNode.input_unionshape(0) << endl;
-  cout << C_computeNode.output_elemshape(0) << endl;
-  cout << C_computeNode.output_unionshape(0) << endl;
+  //auto C_op = C->op;
+  //auto C_computeNode = *C_op.as<te::ComputeOpNode>();
+  //cout << C_computeNode.in_eshape << endl;
+  //cout << C_computeNode.in_ushape << endl;
+  //cout << C_computeNode.out_eshape << endl;
+  //cout << C_computeNode.out_ushape << endl;
+  //cout << C_computeNode.input_elemshape(0) << endl;
+  //cout << C_computeNode.input_unionshape(0) << endl;
+  //cout << C_computeNode.output_elemshape(0) << endl;
+  //cout << C_computeNode.output_unionshape(0) << endl;
 
-  cout << C << endl;
-  cout << C->op->InputTensors() << endl;
+  //cout << C << endl;
+  //cout << C->op->InputTensors() << endl;
 
   te::Tensor D = te::compute(
       {M, N}, std::function<te::TslExpr(tir::Var, tir::Var)>([=](tir::Var i, tir::Var j) {
@@ -74,8 +74,18 @@ int main() {
       }),
       "tsladd(Y,(A+B+X))");
 
+  auto& x = E->op->attrs;
+  
+  cout << x << endl;
+  cout << x.count("TslOp") << endl;
   auto sch=te::create_schedule({E->op});
   cout << sch->stages << endl;
+  auto& stack = sch[D]->decomp_stack;
+  cout << stack.size() << endl;
+  auto top = stack.front();
+  for (auto& v : top.split_relations) {
+    cout << v << endl;
+  }
   //sch[D].decompose({32, 32});
 
   

@@ -78,7 +78,7 @@ DataType ComputeOpNode::output_dtype(size_t idx) const {
 Array<PrimExpr> BaseComputeOpNode::output_shape(size_t idx) const {
   CHECK_LT(idx, num_outputs());
   // for now, all outputs of a BaseComputeOp have the same shape
-  if (!origin_shape.defined()) {
+  if (attrs.count("TslOp")==0) {
     Array<PrimExpr> shape;
     for (const auto& ivar : this->axis) {
       const Range& r = ivar->dom;
@@ -108,6 +108,9 @@ Tensor compute(Array<PrimExpr> shape, FCompute fcompute, std::string name, std::
 
 Tensor compute(Array<PrimExpr> shape, TSLCompute fcompute, std::string name, std::string tag,
                Map<String, ObjectRef> attrs) {
+  if (attrs.find("TslOp") == attrs.end()) {
+    attrs.Set("TslOp", Bool(1));
+  }
   size_t ndim = shape.size();
   std::vector<IterVar> axis;
   std::vector<Var> args;
@@ -175,9 +178,7 @@ ComputeOp::ComputeOp(std::string name, std::string tag, Map<String, ObjectRef> a
                      Array<IterVar> axis, Array<PrimExpr> shape, Array<PrimExpr> out_ushape,
                      Array<PrimExpr> out_eshape, Array<PrimExpr> in_ushape,
                      Array<PrimExpr> in_eshape, Array<TslExpr> body) {
-  if (!attrs.defined()) {
-    attrs = Map<String, ObjectRef>();
-  }
+  CHECK(attrs.find("TslOp") != attrs.end()) << "\" TslOp \" not in attrs";
   auto n = make_object<ComputeOpNode>();
   n->name = std::move(name);
   n->tag = std::move(tag);
@@ -195,7 +196,7 @@ ComputeOp::ComputeOp(std::string name, std::string tag, Map<String, ObjectRef> a
     const tir::ReduceNode* reduce = n->body[0].as<tir::ReduceNode>();
     n->reduce_axis = reduce->axis;
   }
-  // VerifyComputeOp(n.get());
+  VerifyComputeOp(n.get());
   // TODO:visitors needs to be modified to support TslExprs.
   data_ = std::move(n);
 }

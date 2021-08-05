@@ -108,31 +108,36 @@ Stage::Stage(Operation op) {
 }
 
 Stage::Stage(Operation op, ScheduleNode* schedptr) {
+  // TODO: NO IDEA WETHER THIS WOULD WORK FOR SCANOP!!!!
   auto n = make_object<StageNode>();
   n->op = op;
   n->origin_op = op;
   n->parent_sched = schedptr;
-  n->all_iter_vars = op->root_iter_vars();
-  Array<IterVar> root_ivars;
-  Array<IterVar> root_rivars;
-  for (auto v : n->all_iter_vars) {
-    if (v->iter_type == kCommReduce) {
-      root_rivars.push_back(v);
-    } else {
-      root_ivars.push_back(v);
+  auto root_iter_vars = op->root_iter_vars();  // axis first, then reduce axis
+  auto entry = StageNode::DecompEntry();
+  entry.factors = op->output_elemshape(0);
+  entry.level = 0;
+  for (auto v : root_iter_vars) {
+    n->all_iter_vars.push_back(v);
+    if (v->iter_type != kOpaque) {
+      std::ostringstream os;
+      os << "." << n->decomp_stack.size();
+      auto prefix = os.str();
+      IterVar left = IterVar(Range(), v->var.copy_with_namehint(prefix + "L"), v->iter_type);
+      IterVar right = IterVar(Range(), v->var.copy_with_namehint(prefix + "R"), v->iter_type);
+      n->all_iter_vars.push_back(left);
+      n->all_iter_vars.push_back(right);
+      n->leaf_iter_vars.push_back(left);
+      n->leaf_iter_vars.push_back(right);
+      auto split = Split(v, right, left, PrimExpr(), 1);
+      n->relations.push_back(split);
+
+      entry.left_ivars.push_back(left);
+      entry.right_ivars.push_back(right);
+      entry.split_relations.push_back(split);
     }
   }
-  n->decomp_stack.push_back(StageNode::DecompEntry(op->output_shape(0),root_ivars,root_rivars,{},0));
-  // remove opaque var from leaf.
-  Array<IterVar> clean;
-  for (IterVar iv : n->all_iter_vars) {
-      if (iv->iter_type != kOpaque) clean.push_back(iv);
-  }
-  if (clean.size() == n->all_iter_vars.size()) {
-      n->leaf_iter_vars = n->all_iter_vars;
-  } else {
-      n->leaf_iter_vars = clean;
-  }
+  n->decomp_stack.push_back(entry);
   data_ = std::move(n);
 }
 
@@ -464,7 +469,56 @@ void printreadgraph(te::ReadGraph rg) {
 
 /////////////////DEBUG/////////////
 
-#if 0
+void decompStackPushHelper(StageNode* self, const Array<PrimExpr>& factors, const Array<IterVar>& new_axis) {
+  auto& stacktop = self->decomp_stack.back();
+  CHECK_EQ(factors.size(), stacktop.left_ivars.size());
+  auto leaf_vars = self->leaf_iter_vars;
+  StageNode::DecompEntry entry;
+  entry.factors = factors;
+  entry.level = stacktop.level + 1;
+  for (size_t i = 0; i < stacktop.left_ivars.size(); i++) {
+    auto& v = stacktop.left_ivars[i];
+    CHECK(v->iter_type != kCommReduce) << "reduce not supported yet";
+    size_t pos = FindNodeRef(leaf_vars.GetArrayNode(), v);
+    if (pos < leaf_vars.size()) {
+      leaf_vars.erase(leaf_vars.begin() + pos);
+    } else {
+      LOG(FATAL);
+    }
+    std::ostringstream os;
+    os << "." << self->decomp_stack.size();
+    auto prefix = os.str();
+    IterVar left = IterVar(Range(), v->var.copy_with_namehint(prefix + "L"), v->iter_type);
+    IterVar right = IterVar(Range(), v->var.copy_with_namehint(prefix + "R"), v->iter_type);
+    self->leaf_iter_vars.push_back(left);
+    self->leaf_iter_vars.push_back(right);
+    self->all_iter_vars.push_back(left);
+    self->all_iter_vars.push_back(right);
+    auto split = Split(v, right, left, PrimExpr(), stacktop.factors[i] / factors[i]);
+    self->relations.push_back(split);
+    entry.left_ivars.push_back(left);
+    entry.right_ivars.push_back(right);
+    entry.split_relations.push_back(split);
+  }
+  self->decomp_stack.push_back(entry);
+  auto& stackbottom = self->decomp_stack.front();
+  CHECK(stackbottom.split_relations.size() == new_axis.size()); //TODO: this is true if no reduce exists in original op
+  for (size_t i = 0; i < new_axis.size(); i++) {
+    auto& old_relation = stackbottom.split_relations[i];
+    auto new_relation = Split(new_axis[i], old_relation->outer, old_relation->inner,
+                              old_relation->factor, old_relation->nparts);
+    size_t pos = FindNodeRef(self->relations.GetArrayNode(), old_relation);
+    if (pos < self->relations.size()) {
+      self->relations.erase(self->relations.begin() + pos);
+      self->relations.insert(self->relations.begin() + pos, new_relation);
+    } else {
+      LOG(FATAL);
+    }
+    stackbottom.split_relations.erase(stackbottom.split_relations.begin() + i);
+    stackbottom.split_relations.insert(stackbottom.split_relations.begin() + i, new_relation);
+  }
+
+}
 
 Stage& Stage::decompose(Array<PrimExpr> factors) {
   StageNode* self = operator->();
@@ -472,10 +526,10 @@ Stage& Stage::decompose(Array<PrimExpr> factors) {
   Operation self_op = self->op;
   arith::Analyzer ana;
   if (auto* origin_op = self_op.as<ComputeOpNode>()) {
-    CHECK(origin_op->origin_shape.defined()) << "Not a TslOp"; //TODO: decide wether this is a TslOp from attrs.
+    CHECK(origin_op->attrs.count("TslOp") != 0)
+        << "Not a TslOp";  
 
-    Array<PrimExpr> origin_in_eshape = origin_op->input_elemshape(0);
-    Array<PrimExpr> origin_in_ushape = origin_op->input_unionshape(0);
+    auto& stacktop = self->decomp_stack.back();
     Array<PrimExpr> origin_shape = origin_op->output_shape(0);
     Array<IterVar> origin_axis = origin_op->axis;
     CHECK(factors.size() == origin_shape.size()) << "shape not coherent";
@@ -483,8 +537,10 @@ Stage& Stage::decompose(Array<PrimExpr> factors) {
     // generate new in u/eshape
     Array<PrimExpr> new_out_eshape, new_out_ushape;
     for (size_t i = 0; i < factors.size(); i++) {
-      CHECK(ana.CanProve(factors[i] < origin_in_eshape[i]))
+      CHECK(ana.CanProve(factors[i] < stacktop.factors[i]))
           << "greater decomposition factor in nested decompose not allowed";
+      CHECK(ana.CanProve(stacktop.factors[i] % factors[i] == 0))
+          << "Non-even decomposition not allowed";
       new_out_eshape.push_back(ana.Simplify(factors[i]));
       new_out_ushape.push_back(ana.Simplify(origin_shape[i] / factors[i]));
     }
@@ -502,30 +558,8 @@ Stage& Stage::decompose(Array<PrimExpr> factors) {
     // stage 2: handle root itervars properly
     // 2.1: handle stage's itervar information
     //!!!!CURRENTLY, SHOULD ALWAYS DECOMPOSE BEFORE MAKING ANY OTHER SCHEDULING!!!
-    for (size_t i = 0; i < origin_axis.size(); i++) {
-      auto& iv = origin_axis[i];
-      auto& sugar = self->all_iter_vars;
-      size_t pos = FindNodeRef(sugar.GetArrayNode(), iv);
-      if (pos < sugar.size()) {
-        sugar.erase(sugar.begin() + pos);
-        sugar.insert(sugar.begin() + pos, new_axis[i]);
-      } else {
-        LOG(FATAL);
-      }
-      auto& sugar = self->leaf_iter_vars;
-      size_t pos = FindNodeRef(sugar.GetArrayNode(), iv);
-      if (pos < sugar.size()) {
-        sugar.erase(sugar.begin() + pos);
-        sugar.insert(sugar.begin() + pos, new_axis[i]);
-      } else {
-        LOG(FATAL);
-      }
-    }
-    // do stack operations and make splits when stack depth is greater than 0(indicating the tensor
-    // have been decomped at least once)
-    if (self->decomp_stack.size() == 0) {
-      StageNode::DecompEntry(factors, new)
-    }
+    decompStackPushHelper(self, factors, new_axis);
+
 
     // TODO:
     // 1.need to expand axis extents. for this a mutator for traversing the expr tree and replacing
@@ -563,7 +597,7 @@ Stage& Stage::decompose(Array<PrimExpr> factors) {
         std::cout << v << ",";
       }
       std::cout << std::endl;
-        
+
 
 
     }
@@ -589,8 +623,6 @@ Stage& Stage::decompose(Array<PrimExpr> factors) {
 
   return *this;
 }  // namespace te
-
-#endif
 
 Stage CopyStage(const Stage& s) {
   ObjectPtr<StageNode> n = make_object<StageNode>(*s.operator->());
@@ -816,10 +848,15 @@ Schedule::Schedule(Array<Operation> ops) {
     output_set.insert(x);
   }
   for (Operation op : post_order) {
-    Stage stage(
-        op,
-        this->operator->());  // xjx: tsl modification, let stagenode hold a scheduleNode* pointer,
-                              // by this we can call createreliablereadGraph inside stage methods.
+    Stage stage;
+    if (op->attrs.count("TslOp") != 0) {
+      stage = Stage(op, this->operator->());  // xjx: tsl modification, let stagenode hold a
+                                              // scheduleNode* pointer, by this we can call
+                                              // createreliablereadGraph inside stage methods.
+    } else {
+      stage = Stage(op);
+    }
+    std::cout << stage->decomp_stack.size() << std::endl;
     stage->is_output = output_set.count(op) != 0;
     n->stages.push_back(stage);
     n->stage_map.Set(op, stage);

@@ -106,6 +106,8 @@ class Var : public PrimExpr {
    */
   TVM_DLL Var copy_with_suffix(const String& suffix) const;
 
+  TVM_DLL Var copy_with_namehint(const String& namehint) const;
+
   /*!
    * \brief Get pointer to the internal value.
    * \return the corresponding Variable.
