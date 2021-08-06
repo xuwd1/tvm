@@ -844,6 +844,9 @@ inline const IterVarAttrNode* IterVarAttr::operator->() const {
   return static_cast<const IterVarAttrNode*>(get());
 }
 
+void ReplaceDataFlow(const Array<Stage>& stages, std::unordered_map<Tensor, Tensor>* vmap,
+                     std::unordered_map<Tensor, Tensor>* rvmap);
+
 }  // namespace te
 }  // namespace tvm
 #endif  // TVM_TE_SCHEDULE_H_

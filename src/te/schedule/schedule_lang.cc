@@ -123,8 +123,8 @@ Stage::Stage(Operation op, ScheduleNode* schedptr) {
       std::ostringstream os;
       os << "." << n->decomp_stack.size();
       auto prefix = os.str();
-      IterVar left = IterVar(Range(), v->var.copy_with_namehint(prefix + "L"), v->iter_type);
-      IterVar right = IterVar(Range(), v->var.copy_with_namehint(prefix + "R"), v->iter_type);
+      IterVar left = IterVar(Range(), v->var.copy_with_suffix(prefix + "L"), v->iter_type);
+      IterVar right = IterVar(Range(), v->var.copy_with_suffix(prefix + "R"), v->iter_type);
       n->all_iter_vars.push_back(left);
       n->all_iter_vars.push_back(right);
       n->leaf_iter_vars.push_back(left);
@@ -458,6 +458,7 @@ Stage& Stage::double_buffer() {
 
 //////////////DEBUG//////////////////
 void printreadgraph(te::ReadGraph rg) {
+  std::cout << "READGRAPH:" << std::endl;
   for (auto kv : rg) {
     std::cout << kv.first << ":";
     for (auto v : kv.second) {
@@ -465,6 +466,8 @@ void printreadgraph(te::ReadGraph rg) {
     }
     std::cout << std::endl;
   }
+  std::cout << std::endl;
+  
 }
 
 /////////////////DEBUG/////////////
@@ -472,7 +475,7 @@ void printreadgraph(te::ReadGraph rg) {
 void decompStackPushHelper(StageNode* self, const Array<PrimExpr>& factors, const Array<IterVar>& new_axis) {
   auto& stacktop = self->decomp_stack.back();
   CHECK_EQ(factors.size(), stacktop.left_ivars.size());
-  auto leaf_vars = self->leaf_iter_vars;
+  auto& leaf_vars = self->leaf_iter_vars;
   StageNode::DecompEntry entry;
   entry.factors = factors;
   entry.level = stacktop.level + 1;
@@ -488,13 +491,13 @@ void decompStackPushHelper(StageNode* self, const Array<PrimExpr>& factors, cons
     std::ostringstream os;
     os << "." << self->decomp_stack.size();
     auto prefix = os.str();
-    IterVar left = IterVar(Range(), v->var.copy_with_namehint(prefix + "L"), v->iter_type);
-    IterVar right = IterVar(Range(), v->var.copy_with_namehint(prefix + "R"), v->iter_type);
+    IterVar left = IterVar(Range(), v->var.copy_with_suffix(prefix + "L"), v->iter_type);
+    IterVar right = IterVar(Range(), v->var.copy_with_suffix(prefix + "R"), v->iter_type);
     self->leaf_iter_vars.push_back(left);
     self->leaf_iter_vars.push_back(right);
     self->all_iter_vars.push_back(left);
     self->all_iter_vars.push_back(right);
-    auto split = Split(v, right, left, PrimExpr(), stacktop.factors[i] / factors[i]);
+    auto split = Split(v, right, left, PrimExpr(), indexdiv(stacktop.factors[i] ,factors[i]));
     self->relations.push_back(split);
     entry.left_ivars.push_back(left);
     entry.right_ivars.push_back(right);
@@ -539,10 +542,10 @@ Stage& Stage::decompose(Array<PrimExpr> factors) {
     for (size_t i = 0; i < factors.size(); i++) {
       CHECK(ana.CanProve(factors[i] < stacktop.factors[i]))
           << "greater decomposition factor in nested decompose not allowed";
-      CHECK(ana.CanProve(stacktop.factors[i] % factors[i] == 0))
+      CHECK(ana.CanProve(indexmod(stacktop.factors[i], factors[i]) == 0))
           << "Non-even decomposition not allowed";
       new_out_eshape.push_back(ana.Simplify(factors[i]));
-      new_out_ushape.push_back(ana.Simplify(origin_shape[i] / factors[i]));
+      new_out_ushape.push_back(ana.Simplify(indexdiv(origin_shape[i] , factors[i])));
     }
     // stage 1: generate new traget decomposing op
     Array<IterVar> new_axis;
@@ -555,28 +558,23 @@ Stage& Stage::decompose(Array<PrimExpr> factors) {
                             origin_shape, new_out_ushape, new_out_eshape, origin_op->in_ushape,
                             origin_op->out_eshape, new_body);
 
-    // stage 2: handle root itervars properly
-    // 2.1: handle stage's itervar information
+    // stage 2: handle stage's itervar information properly
     //!!!!CURRENTLY, SHOULD ALWAYS DECOMPOSE BEFORE MAKING ANY OTHER SCHEDULING!!!
     decompStackPushHelper(self, factors, new_axis);
 
-
-    // TODO:
-    // 1.need to expand axis extents. for this a mutator for traversing the expr tree and replacing
-    // itervars are needed! 2.need to update itervar related information afterward. 3.make splits
-    // 4.push decomp stack
-
+    // stage 3: update stage's op and update reader operations 
     self->op = new_op;
-
-    auto readgraph = CreateReadGraph(self->parent_sched->outputs);
+    std::cout << "NEW:" << new_op.output(0) << std::endl;
+   
+    auto readgraph = CreateReadGraph(self->parent_sched->outputs); //no new op is added, so readgraph of
+                              //original schedule is enough
     auto feedgraph = CreateFeedGraph(readgraph);
-    // 1.1 replace reader's input tensor
-    te::Tensor origin_tensor = self_op.output(0);
+    te::Tensor origin_tensor = self->origin_op.output(0); //only meant to use original op's tensor output to find readers! 
     te::Tensor new_tensor = new_op.output(0);
     if (feedgraph.find(origin_tensor) != feedgraph.end()) {
       auto readers = feedgraph.at(origin_tensor);
       std::unordered_map<Tensor, Tensor> vsub;
-      vsub[origin_tensor] = new_tensor;
+      vsub[self_op.output(0)] = new_tensor;
       std::unordered_map<Tensor, Tensor> vmap;
       std::unordered_map<Tensor, Tensor> rvmap;
       for (Operation op : readers) {
@@ -588,22 +586,10 @@ Stage& Stage::decompose(Array<PrimExpr> factors) {
         rvmap[repl_op.output(0)] = s->op.output(0);
         s->op = repl_op;
       }
+      ReplaceDataFlow(self->parent_sched->stages, &vmap, &rvmap); // use this TVM infra to make all possible updates in dataflow graph(stage graph)
     }
 
-    /*
-    for (auto kv : feedgraph) {
-      std::cout << kv.first << ":";
-      for (auto v : kv.second) {
-        std::cout << v << ",";
-      }
-      std::cout << std::endl;
-
-
-
-    }
-    std::cout << (feedgraph.find(self_op->InputTensors()[0])!=feedgraph.end()) << std::endl;
-    std::cout << (feedgraph.find(self_op.output(0)) != feedgraph.end()) << std::endl;*/
-
+    // stage 3e: some debug info. 
     readgraph = CreateReliableReadGraph(self->parent_sched);
     std::cout << "////////////////////////////" << std::endl;
     printreadgraph(readgraph);
@@ -616,6 +602,16 @@ Stage& Stage::decompose(Array<PrimExpr> factors) {
     for (auto& v : postdfs) {
       std::cout << v.output(0) << std::endl;
     }
+
+    //stage 4: backward elemshape inference
+    // CURRENT VERSION HAS NO SUPPORT FOR REDUCE. TODO: implement proposed infinite/finite reduce and investigate x+rx
+    
+
+
+
+
+
+
 
   } else {
     CHECK(0) << "Can only decompose ComputeOp";
