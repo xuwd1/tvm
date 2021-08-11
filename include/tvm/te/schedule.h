@@ -63,7 +63,7 @@ class Stage : public ObjectRef {
    * \param op The operator in the schedule
    */
   explicit Stage(Operation op);
-  //xjx add
+  // xjx add
   explicit Stage(Operation op, ScheduleNode* schedptr);
   /*!
    * \brief access the internal node container
@@ -608,9 +608,6 @@ class SpecializedCondition : public ObjectRef {
   TVM_DLL void ExitWithScope();
 };
 
-
-
-
 /*!
  * \brief represents a stage.
  *
@@ -630,8 +627,8 @@ class StageNode : public Object {
  public:
   // xjx add
   struct DecompEntry;
+  struct ReadShapeEntry;
   ScheduleNode* parent_sched;
-
 
   /*!
    * \brief The operation of stage, can be different from original op.
@@ -687,8 +684,11 @@ class StageNode : public Object {
    * \brief The decomposition stack
    *  The decomp stack is used to track the hierarchy of decomposition
    */
-  std::vector<DecompEntry> decomp_stack;
-  
+  std::vector<DecompEntry> decomp_stack;  // TODO: TVM object-rize this
+
+  //std::unordered_map<StageNode*, ReadShapeEntry>;
+  std::unordered_map<Stage, ReadShapeEntry, ObjectPtrHash, ObjectPtrEqual> read_shape_map;
+
   struct DecompEntry {
     Array<PrimExpr> factors;
     Array<IterVar> left_ivars;
@@ -698,7 +698,17 @@ class StageNode : public Object {
     DecompEntry() = default;
     DecompEntry(Array<PrimExpr> factors, Array<IterVar> left_ivars, Array<IterVar> right_ivars,
                 Array<Split> split_relations, size_t level)
-        : factors(factors),left_ivars(left_ivars),right_ivars(right_ivars),level(level){}
+        : factors(factors), left_ivars(left_ivars), right_ivars(right_ivars), level(level) {}
+  };
+  struct ReadShapeEntry {
+    Array<PrimExpr> read_ushape;
+    Array<PrimExpr> read_eshape;
+    Array<PrimExpr> strides;
+    bool defined{false};
+    ReadShapeEntry() = default;
+    ReadShapeEntry(Array<PrimExpr> read_ushape, Array<PrimExpr> read_eshape,
+                   Array<PrimExpr> strides)
+        : read_ushape(read_ushape), read_eshape(read_eshape), strides(strides), defined(true) {}
   };
 
   void VisitAttrs(AttrVisitor* v) {
@@ -718,6 +728,21 @@ class StageNode : public Object {
     v->Visit("group", &group);
     v->Visit("num_child_stages", &num_child_stages);
   }
+
+  void SetOrUpdateReadShapeMap(Stage newstage, Stage oldstage, ReadShapeEntry entry) {
+    //1. set readshapeentry
+    if (entry.defined) {
+      read_shape_map[newstage] = entry;
+    }
+    //2. new stage inserted as provider, need to update map
+    else {
+      if (read_shape_map.find(oldstage) != read_shape_map.end()) {
+        read_shape_map[newstage] = read_shape_map[oldstage];
+        read_shape_map.erase(oldstage);
+      }
+    }
+  }
+
 
   static constexpr const char* _type_key = "Stage";
   TVM_DECLARE_FINAL_OBJECT_INFO(StageNode, Object);

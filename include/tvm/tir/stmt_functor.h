@@ -325,6 +325,15 @@ TVM_DLL Stmt IRTransform(Stmt stmt, const runtime::PackedFunc& preorder,
 TVM_DLL void PostOrderVisit(const ObjectRef& node, std::function<void(const ObjectRef&)> fvisit);
 
 /*!
+ * \brief Recursively visit the ir in pre DFS order node, apply fvisit
+ * Each node is guaranteed to be visited only once.
+
+ * \param node The ir to be visited.
+ * \param fvisit The visitor function to be applied.
+ */
+TVM_DLL void PreOrderVisit(const ObjectRef& node, std::function<void(const ObjectRef&)> fvisit);
+
+/*!
  * \brief Substitute the var specified by vmap.
  * \param stmt The source statement to be substituted
  * \param vmap returns a new value if re-mapping is needed, otherwise returns nullptr.

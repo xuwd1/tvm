@@ -413,6 +413,43 @@ void PostOrderVisit(const ObjectRef& node, std::function<void(const ObjectRef&)>
   }
 }
 
+//xjx added
+class PreOrderIRApplyVisit : public StmtExprVisitor {
+ public:
+  explicit PreOrderIRApplyVisit(std::function<void(const ObjectRef&)> f) : f_(f) {}
+
+  void VisitExpr(const PrimExpr& node) final {
+    if (visited_.count(node.get()) != 0) return;
+    visited_.insert(node.get());
+    f_(node);
+    ExprVisitor::VisitExpr(node);
+  }
+
+  void VisitStmt(const Stmt& node) final {
+    if (visited_.count(node.get()) != 0) return;
+    visited_.insert(node.get());
+    f_(node);
+    StmtVisitor::VisitStmt(node);
+  }
+
+ private:
+  std::function<void(const ObjectRef&)> f_;
+  std::unordered_set<const Object*> visited_;
+};
+
+
+
+//xjx added
+void PreOrderVisit(const ObjectRef& node, std::function<void(const ObjectRef&)> fvisit) {
+  if (node.as<StmtNode>()) {
+    PreOrderIRApplyVisit visitor(fvisit);
+    visitor(Downcast<Stmt>(node));
+  } else {
+    PreOrderIRApplyVisit visitor(fvisit);
+    visitor(Downcast<PrimExpr>(node));
+  }
+}
+
 class IRTransformer final : public StmtExprMutator {
  public:
   IRTransformer(const runtime::PackedFunc& f_preorder, const runtime::PackedFunc& f_postorder,
