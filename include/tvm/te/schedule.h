@@ -724,7 +724,7 @@ class StageNode : public Object {
     v->Visit("attach_stage", &attach_stage);
     v->Visit("scope", &scope);
     v->Visit("is_output", &is_output);
-    v->Visit("double_buffer", &double_buffer);
+    v->Visit("double_buffer",&double_buffer);
     v->Visit("group", &group);
     v->Visit("num_child_stages", &num_child_stages);
   }
