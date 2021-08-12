@@ -11,7 +11,6 @@
 #include <tvm/tir/expr.h>
 #include <tvm/tir/var.h>
 
-
 #include <algorithm>
 #include <iostream>
 #include <limits>
@@ -24,7 +23,6 @@ namespace tir {
 
 #define TVM_TSL_DECLARE_BINOP_CONSTRUCTOR(Name) TVM_DLL Name(TslExpr a, TslExpr b)
 
-
 class TslExprNode : public PrimExprNode {
  public:
   static constexpr const char* _type_key = "TslExpr";
@@ -34,11 +32,107 @@ class TslExprNode : public PrimExprNode {
 
 class TslExpr : public PrimExpr {
  public:
-  virtual Array<Array<PrimExpr>> PropbackElemshape(Array<PrimExpr> source){ 
+  virtual Array<Array<PrimExpr>> PropbackElemshape(Array<PrimExpr> source) {
     CHECK_EQ(0, 1);
     return Array<Array<PrimExpr>>();
   }
   TVM_DEFINE_OBJECT_REF_METHODS(TslExpr, PrimExpr, TslExprNode);
+};
+
+class TslCommReducerNode : public Object {
+ public:
+  /*! \brief The left argument of reducer */
+  Array<Var> lhs;
+  /*! \brief The right argument of reducer */
+  Array<Var> rhs;
+  /*! \brief The result of reducer */
+  Array<TslExpr> result;
+  /*!
+   * \brief The identity element of reducer, which leaves other
+   *  elements unchanged when combined with it, with respect to
+   *  the binary operation of this reducer uses.
+   */
+  Array<TslExpr> identity_element;
+  /*! \brief Function call operator to combine a and b */
+  Array<TslExpr> operator()(Array<TslExpr> a, Array<TslExpr> b) const;
+
+  void VisitAttrs(AttrVisitor* v) {
+    v->Visit("lhs", &lhs);
+    v->Visit("rhs", &rhs);
+    v->Visit("result", &result);
+    v->Visit("identity_element", &identity_element);
+  }
+
+  bool SEqualReduce(const TslCommReducerNode* other, SEqualReducer equal) const {
+    return equal.DefEqual(lhs, other->lhs) && equal.DefEqual(rhs, other->rhs) &&
+           equal(result, other->result) && equal(identity_element, other->identity_element);
+  }
+
+  void SHashReduce(SHashReducer hash_reduce) const {
+    hash_reduce.DefHash(lhs);
+    hash_reduce.DefHash(rhs);
+    hash_reduce(result);
+    hash_reduce(identity_element);
+  }
+
+  static constexpr const char* _type_key = "tir.TslCommReducer";
+  static constexpr const bool _type_has_method_sequal_reduce = true;
+  static constexpr const bool _type_has_method_shash_reduce = true;
+  TVM_DECLARE_FINAL_OBJECT_INFO(TslCommReducerNode, Object);
+};
+
+class TslCommReducer : public ObjectRef {
+ public:
+  TVM_DLL TslCommReducer(Array<Var> lhs, Array<Var> rhs, Array<TslExpr> result,
+                         Array<TslExpr> identity_element);
+
+  TVM_DEFINE_OBJECT_REF_METHODS(TslCommReducer, ObjectRef, TslCommReducerNode);
+};
+
+
+class TslReduceNode : public TslExprNode {
+ public:
+  TslCommReducer combiner;
+  Array<TslExpr> source;
+  Array<TslExpr> init;
+  Array<IterVar> axis;
+  PrimExpr condition;
+  int value_index;
+  void VisitAttrs(AttrVisitor* v) {
+    v->Visit("dtype", &dtype);
+    v->Visit("combiner", &combiner);
+    v->Visit("source", &source);
+    v->Visit("init", &init);
+    v->Visit("axis", &axis);
+    v->Visit("condition", &condition);
+    v->Visit("value_index", &value_index);
+  }
+  bool SEqualReduce(const TslReduceNode* other, SEqualReducer equal) const {
+    // check axis first so IterVars can define the necessary variables.
+    return equal(dtype, other->dtype) && equal(axis, other->axis) &&
+           equal(combiner, other->combiner) && equal(source, other->source) &&
+           equal(init, other->init) && equal(condition, other->condition) &&
+           equal(value_index, other->value_index);
+  }
+  void SHashReduce(SHashReducer hash_reduce) const {
+    hash_reduce(dtype);
+    hash_reduce(axis);
+    hash_reduce(combiner);
+    hash_reduce(source);
+    hash_reduce(init);
+    hash_reduce(condition);
+    hash_reduce(value_index);
+  }
+  static constexpr const char* _type_key = "tir.TslReduce";
+  TVM_DECLARE_FINAL_OBJECT_INFO(TslReduceNode, TslExprNode);
+};
+
+class TslReduce : TslExpr {
+ public:
+  TVM_DLL TslReduce(TslCommReducer combiner, Array<TslExpr> src, Array<IterVar> rdom, PrimExpr condition,
+                 int value_index, Array<TslExpr> init);
+
+  TVM_DEFINE_OBJECT_REF_METHODS(TslReduce, TslExpr, TslReduceNode);
 };
 
 template <typename T>
@@ -118,7 +212,6 @@ class TslProducerLoad : public TslExpr {
   Array<Array<PrimExpr>> PropbackElemshape(Array<PrimExpr> source) final;
   TVM_DEFINE_OBJECT_REF_METHODS(TslProducerLoad, TslExpr, TslProducerLoadNode);
 };
-
 
 }  // namespace tir
 }  // namespace tvm

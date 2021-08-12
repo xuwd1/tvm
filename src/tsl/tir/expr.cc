@@ -36,14 +36,95 @@ namespace tir {
     data_ = std::move(node);                                          \
   }
 
+
+TslCommReducer::TslCommReducer(Array<Var> lhs, Array<Var> rhs, Array<TslExpr> result,
+                               Array<TslExpr> identity_element) {
+  auto n = make_object<TslCommReducerNode>();
+  n->lhs = lhs;
+  n->rhs = rhs;
+  n->result = result;
+  n->identity_element = identity_element;
+  data_ = std::move(n);
+}
+
+Array<TslExpr> TslCommReducerNode::operator()(Array<TslExpr> a, Array<TslExpr> b) const {
+  CHECK_EQ(a.size(), b.size());
+  CHECK_EQ(lhs.size(), a.size());
+  CHECK_EQ(rhs.size(), b.size());
+  Map<Var, PrimExpr> value_map;
+  for (size_t i = 0; i < a.size(); ++i) {
+    value_map.Set(lhs[i], a[i]);
+    value_map.Set(rhs[i], b[i]);
+  }
+  auto ret = this->result;
+  ret.MutateByApply([&value_map](const PrimExpr& e) { return Substitute(e, value_map); });
+  return ret;
+}
+//TODO:global registration
+TVM_REGISTER_NODE_TYPE(TslCommReducerNode);
+TVM_STATIC_IR_FUNCTOR(ReprPrinter, vtable)
+    .set_dispatch<TslCommReducerNode>([](const ObjectRef& node, ReprPrinter* p) {
+      auto* op = static_cast<const TslCommReducerNode*>(node.get());
+      p->stream << "tsl_comm_reducer(result=" << op->result << ", lhs=" << op->lhs
+                << ", rhs=" << op->rhs << ", identity_element=" << op->identity_element << ")";
+    });
+
+
+TslReduce::TslReduce(TslCommReducer combiner, Array<TslExpr> src, Array<IterVar> axis,
+                     PrimExpr condition, int value_index, Array<TslExpr> init) {
+  for (size_t i = 0; i < axis.size(); i++) {
+    CHECK_EQ(axis[i]->iter_type, kCommReduce) << "Can only take axis created by reduce_axis";
+  }
+  if (!condition.defined()) {
+    condition = const_true();
+  }
+  auto n = make_object<TslReduceNode>();
+  CHECK(src.defined());
+  if (!init.empty()) {
+    CHECK_EQ(init.size(), src.size()) << "Number of inits should match number of exprs";
+    for (size_t i = 0; i < init.size(); i++) {
+      //TODO:check these
+      std::cout << __FILE__ << __LINE__ << std::endl;
+      CHECK(init[i]->IsInstance<ProducerLoadNode>() || init[i]->IsInstance<IntImmNode>() ||
+            init[i]->IsInstance<FloatImmNode>())
+          << "init can only be a IntImm, FloatImm or ProducerLoad";
+    }
+  }
+  n->dtype = src[value_index].dtype();
+  n->combiner = std::move(combiner);
+  n->source = std::move(src);
+  n->init = std::move(init);
+  n->axis = std::move(axis);
+  n->condition = condition;
+  n->value_index = value_index;
+  data_ = std::move(n);
+}
+
+//TODO:global registration
+TVM_REGISTER_NODE_TYPE(TslReduceNode);
+
+TVM_STATIC_IR_FUNCTOR(ReprPrinter, vtable)
+    .set_dispatch<TslReduceNode>([](const ObjectRef& node, ReprPrinter* p) {
+      auto* op = static_cast<const TslReduceNode*>(node.get());
+      p->stream << "tsl_reduce(combiner=" << op->combiner;
+      p->stream << ", source=" << op->source;
+      p->stream << ", init=" << op->init;
+      p->stream << ", axis=" << op->axis;
+      p->stream << ", where=" << op->condition;
+      p->stream << ", value_index=" << op->value_index;
+      p->stream << ")";
+    });
+
+
+// TslAdd
+TVM_DEFINE_BINOP_CONSTRUCTOR(TslAdd);
+
 Array<Array<PrimExpr>> TslAdd::PropbackElemshape(Array<PrimExpr> source) {
   Array<Array<PrimExpr>> ret;
   ret.push_back(source);
   ret.push_back(source);
   return ret;
 }
-// TslAdd
-TVM_DEFINE_BINOP_CONSTRUCTOR(TslAdd);
 
 TVM_REGISTER_NODE_TYPE(TslAddNode);
 
