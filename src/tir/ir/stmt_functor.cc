@@ -24,7 +24,7 @@
 
 #include <functional>
 
-#include "functor_common.h"
+#include <tvm/tir/functor_common.h>
 
 namespace tvm {
 namespace tir {

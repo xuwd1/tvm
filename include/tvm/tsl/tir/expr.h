@@ -39,12 +39,70 @@ class TslExpr : public PrimExpr {
   TVM_DEFINE_OBJECT_REF_METHODS(TslExpr, PrimExpr, TslExprNode);
 };
 
+
+//TODO: NOT equivalent of TVM Var, currently solely for acting as a placeholder in Tslcommreducer
+class TslVarNode :public TslExprNode {
+ public:
+  /*!
+   * \brief The hint to the variable name.
+   * \note Each variable is uniquely identified by its address.
+   */
+  String name_hint;
+
+  void VisitAttrs(AttrVisitor* v) {
+    v->Visit("dtype", &dtype);
+    v->Visit("name", &name_hint);
+  }
+
+  bool SEqualReduce(const TslVarNode* other, SEqualReducer equal) const {
+    if (!equal(dtype, other->dtype)) return false;
+    return equal.FreeVarEqualImpl(this, other);
+  }
+
+  void SHashReduce(SHashReducer hash_reduce) const {
+    hash_reduce(dtype);
+    hash_reduce.FreeVarHashImpl(this);
+  }
+
+  static constexpr const char* _type_key = "tir.TslVar";
+  static constexpr const uint32_t _type_child_slots = 1;
+  TVM_DECLARE_BASE_OBJECT_INFO(TslVarNode, TslExprNode);
+};
+
+//TODO: NOT equivalent of TVM Var, currently solely for acting as a placeholder in Tslcommreducer
+class TslVar : public TslExpr {
+ public:
+  explicit TslVar(ObjectPtr<Object> n) : TslExpr(n) {}
+  /*!
+   * \brief Constructor
+   * \param name_hint variable name
+   * \param dtype data type
+   */
+  TVM_DLL explicit TslVar(String name_hint = "v", DataType dtype = DataType::Int(32));
+
+
+
+  /*!
+   * \brief Get pointer to the internal value.
+   * \return the corresponding Variable.
+   */
+  const TslVarNode* operator->() const { return get(); }
+  /*!
+   * \brief Get pointer to the internal value.
+   * \return the corresponding Variable.
+   */
+  const TslVarNode* get() const { return static_cast<const TslVarNode*>(data_.get()); }
+  /*! \brief type indicate the container type */
+  using ContainerType = TslVarNode;
+};
+
+
 class TslCommReducerNode : public Object {
  public:
   /*! \brief The left argument of reducer */
-  Array<Var> lhs;
+  Array<TslVar> lhs;
   /*! \brief The right argument of reducer */
-  Array<Var> rhs;
+  Array<TslVar> rhs;
   /*! \brief The result of reducer */
   Array<TslExpr> result;
   /*!
@@ -83,7 +141,7 @@ class TslCommReducerNode : public Object {
 
 class TslCommReducer : public ObjectRef {
  public:
-  TVM_DLL TslCommReducer(Array<Var> lhs, Array<Var> rhs, Array<TslExpr> result,
+  TVM_DLL TslCommReducer(Array<TslVar> lhs, Array<TslVar> rhs, Array<TslExpr> result,
                          Array<TslExpr> identity_element);
 
   TVM_DEFINE_OBJECT_REF_METHODS(TslCommReducer, ObjectRef, TslCommReducerNode);

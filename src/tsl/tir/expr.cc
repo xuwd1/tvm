@@ -2,6 +2,7 @@
 #include <tvm/tir/expr.h>
 #include <tvm/tir/op.h>
 #include <tvm/tir/stmt_functor.h>
+#include <tvm/tir/tsl/stmt_functor.h>
 #include <tvm/tsl/tir/expr.h>
 
 #include <limits>
@@ -37,7 +38,25 @@ namespace tir {
   }
 
 
-TslCommReducer::TslCommReducer(Array<Var> lhs, Array<Var> rhs, Array<TslExpr> result,
+TslVar::TslVar(String name_hint, DataType dtype) {
+   auto n = make_object<TslVarNode>();
+   n->name_hint = std::move(name_hint);
+   n->dtype = std::move(dtype);
+   data_ = std::move(n);
+}
+
+//TODO: global registration of TslVar
+
+TVM_REGISTER_NODE_TYPE(TslVarNode);
+
+TVM_STATIC_IR_FUNCTOR(ReprPrinter, vtable)
+    .set_dispatch<TslVarNode>([](const ObjectRef& node, ReprPrinter* p) {
+      auto* op = static_cast<const TslVarNode*>(node.get());
+      p->stream << op->name_hint;
+    });
+
+
+TslCommReducer::TslCommReducer(Array<TslVar> lhs, Array<TslVar> rhs, Array<TslExpr> result,
                                Array<TslExpr> identity_element) {
   auto n = make_object<TslCommReducerNode>();
   n->lhs = lhs;
@@ -51,16 +70,18 @@ Array<TslExpr> TslCommReducerNode::operator()(Array<TslExpr> a, Array<TslExpr> b
   CHECK_EQ(a.size(), b.size());
   CHECK_EQ(lhs.size(), a.size());
   CHECK_EQ(rhs.size(), b.size());
-  Map<Var, PrimExpr> value_map;
+  Map<TslVar,TslExpr> value_map;
   for (size_t i = 0; i < a.size(); ++i) {
     value_map.Set(lhs[i], a[i]);
     value_map.Set(rhs[i], b[i]);
   }
   auto ret = this->result;
-  ret.MutateByApply([&value_map](const PrimExpr& e) { return Substitute(e, value_map); });
+  ret.MutateByApply([&value_map](const TslExpr& e) { return Substitute(e, value_map); });
   return ret;
 }
-//TODO:global registration
+
+//TODO:global registration of TslCommReducer
+
 TVM_REGISTER_NODE_TYPE(TslCommReducerNode);
 TVM_STATIC_IR_FUNCTOR(ReprPrinter, vtable)
     .set_dispatch<TslCommReducerNode>([](const ObjectRef& node, ReprPrinter* p) {
@@ -100,7 +121,8 @@ TslReduce::TslReduce(TslCommReducer combiner, Array<TslExpr> src, Array<IterVar>
   data_ = std::move(n);
 }
 
-//TODO:global registration
+//TODO:global registration of TslReduce
+
 TVM_REGISTER_NODE_TYPE(TslReduceNode);
 
 TVM_STATIC_IR_FUNCTOR(ReprPrinter, vtable)

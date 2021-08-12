@@ -20,8 +20,7 @@
  * \file expr_functor.cc
  */
 #include <tvm/tir/expr_functor.h>
-
-#include "functor_common.h"
+#include <tvm/tir/functor_common.h>
 
 namespace tvm {
 namespace tir {
