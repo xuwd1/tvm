@@ -39,9 +39,69 @@ class TslExpr : public PrimExpr {
   TVM_DEFINE_OBJECT_REF_METHODS(TslExpr, PrimExpr, TslExprNode);
 };
 
+class TslIntImmNode : public TslExprNode {
+ public:
+  int64_t value;
+  //TODO: maybe adding shape attrs on tslexprnodes whose values are delay-inferred? 
+  void VisitAttrs(AttrVisitor* v) { 
+    v->Visit("dtype", &dtype);
+    v->Visit("value", &value);
+  }
+  bool SEqualReduce(const TslIntImmNode* other, SEqualReducer equal) const {
+    return equal(dtype, other->dtype) && equal(value, other->value);
+  }
 
-//TODO: NOT equivalent of TVM Var, currently solely for acting as a placeholder in Tslcommreducer
-class TslVarNode :public TslExprNode {
+  void SHashReduce(SHashReducer hash_reduce) const {
+    hash_reduce(dtype);
+    hash_reduce(value);
+  }
+  static constexpr const char* _type_key = "TslIntImm";
+  TVM_DECLARE_FINAL_OBJECT_INFO(TslIntImmNode, TslExprNode);
+};
+
+class TslIntImm : public TslExpr {
+ public:
+  /*!
+   * \brief Constructor.
+   * \param dtype The data type of the value.
+   * \param value The internal value.
+   */
+  TVM_DLL TslIntImm(DataType dtype, int64_t value);
+
+  TVM_DEFINE_OBJECT_REF_METHODS(TslIntImm, TslExpr, TslIntImmNode);
+};
+
+class TslFloatImmNode : public TslExprNode {
+ public:
+  double value;
+
+  void VisitAttrs(AttrVisitor* v) {
+    v->Visit("dtype", &dtype);
+    v->Visit("value", &value);
+  }
+
+  bool SEqualReduce(const TslFloatImmNode* other, SEqualReducer equal) const {
+    return equal(dtype, other->dtype) && equal(value, other->value);
+  }
+
+  void SHashReduce(SHashReducer hash_reduce) const {
+    hash_reduce(dtype);
+    hash_reduce(value);
+  }
+
+  static constexpr const char* _type_key = "TslFloatImm";
+  TVM_DECLARE_FINAL_OBJECT_INFO(TslFloatImmNode, TslExprNode);
+};
+
+class TslFloatImm : public TslExpr {
+ public:
+  TVM_DLL TslFloatImm(DataType dtype, double value);
+  TVM_DEFINE_OBJECT_REF_METHODS(TslFloatImm, TslExpr, TslFloatImmNode);
+};
+
+
+// TODO: NOT equivalent of TVM Var, currently solely for acting as a placeholder in Tslcommreducer
+class TslVarNode : public TslExprNode {
  public:
   /*!
    * \brief The hint to the variable name.
@@ -69,7 +129,7 @@ class TslVarNode :public TslExprNode {
   TVM_DECLARE_BASE_OBJECT_INFO(TslVarNode, TslExprNode);
 };
 
-//TODO: NOT equivalent of TVM Var, currently solely for acting as a placeholder in Tslcommreducer
+// TODO: NOT equivalent of TVM Var, currently solely for acting as a placeholder in Tslcommreducer
 class TslVar : public TslExpr {
  public:
   explicit TslVar(ObjectPtr<Object> n) : TslExpr(n) {}
@@ -79,8 +139,6 @@ class TslVar : public TslExpr {
    * \param dtype data type
    */
   TVM_DLL explicit TslVar(String name_hint = "v", DataType dtype = DataType::Int(32));
-
-
 
   /*!
    * \brief Get pointer to the internal value.
@@ -95,7 +153,6 @@ class TslVar : public TslExpr {
   /*! \brief type indicate the container type */
   using ContainerType = TslVarNode;
 };
-
 
 class TslCommReducerNode : public Object {
  public:
@@ -147,7 +204,6 @@ class TslCommReducer : public ObjectRef {
   TVM_DEFINE_OBJECT_REF_METHODS(TslCommReducer, ObjectRef, TslCommReducerNode);
 };
 
-
 class TslReduceNode : public TslExprNode {
  public:
   TslCommReducer combiner;
@@ -187,8 +243,8 @@ class TslReduceNode : public TslExprNode {
 
 class TslReduce : TslExpr {
  public:
-  TVM_DLL TslReduce(TslCommReducer combiner, Array<TslExpr> src, Array<IterVar> rdom, PrimExpr condition,
-                 int value_index, Array<TslExpr> init);
+  TVM_DLL TslReduce(TslCommReducer combiner, Array<TslExpr> src, Array<IterVar> rdom,
+                    PrimExpr condition, int value_index, Array<TslExpr> init);
 
   TVM_DEFINE_OBJECT_REF_METHODS(TslReduce, TslExpr, TslReduceNode);
 };

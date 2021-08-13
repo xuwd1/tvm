@@ -1,13 +1,12 @@
-#ifndef TVM_TIR_STMT_FUNCTOR_H_
-#define TVM_TIR_STMT_FUNCTOR_H_
+#ifndef TVM_TSL_TIR_STMT_FUNCTOR_H_
+#define TVM_TSL_TIR_STMT_FUNCTOR_H_
 
 #include <tvm/node/container.h>
 #include <tvm/node/functor.h>
 #include <tvm/tir/expr.h>
-#include <tvm/tir/tsl/expr.h>
+#include <tvm/tsl/tir/expr.h>
 #include <tvm/tir/expr_functor.h>
 #include <tvm/tir/stmt.h>
-
 #include <unordered_map>
 #include <utility>
 

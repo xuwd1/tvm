@@ -15,7 +15,18 @@ namespace tvm {
 
 TVM_DLL TslExpr gemm(tir::TslExpr src, Array<tir::IterVar> axis, Array<tir::TslExpr> init = {});
 
-
+inline TslExpr make_tslzero(DataType t) { 
+  CHECK(t.is_scalar());
+  CHECK(!t.is_handle());
+  if (t.is_int()) {
+    return TslIntImm(t, static_cast<int64_t>(0));
+  } 
+  if (t.is_float()) {
+    return TslFloatImm(t, static_cast<double>(0));
+  }
+  LOG(FATAL) << "cannot make tslzero for " << t;
+  return TslExpr();
+}
 
 }
 

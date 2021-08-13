@@ -2,9 +2,8 @@
 #include <tvm/tir/expr.h>
 #include <tvm/tir/op.h>
 #include <tvm/tir/stmt_functor.h>
-#include <tvm/tir/tsl/stmt_functor.h>
 #include <tvm/tsl/tir/expr.h>
-
+#include <tvm/tsl/tir/stmt_functor.h>
 #include <limits>
 #include <memory>
 
@@ -37,6 +36,63 @@ namespace tir {
     data_ = std::move(node);                                          \
   }
 
+
+TslIntImm::TslIntImm(DataType dtype, int64_t value) { 
+  CHECK(dtype.is_scalar());
+  CHECK(dtype.is_int()) << "only support int for now";
+  auto n = make_object<TslIntImmNode>();
+  n->dtype = dtype;
+  n->value = value;
+  data_ = std::move(n);
+}
+
+// TODO: global registration of TslInt
+
+TVM_REGISTER_NODE_TYPE(TslIntImmNode);
+
+TVM_STATIC_IR_FUNCTOR(ReprPrinter, vtable)
+    .set_dispatch<TslIntImmNode>([](const ObjectRef& node, ReprPrinter* p) {
+      auto* op = static_cast<const TslIntImmNode*>(node.get());
+      if (op->dtype == DataType::Int(32)) {
+        p->stream << "TslInt(" << op->value << ")";
+      } else {
+        p->stream << "(" << op->dtype << ")" << op->value;
+      }
+    });
+
+TslFloatImm::TslFloatImm(DataType dtype, double value) { 
+  CHECK(dtype.is_scalar());
+  CHECK(dtype.is_float());
+  auto n = make_object<TslFloatImmNode>(); 
+  n->dtype = dtype;
+  n->value = value;
+  data_ = std::move(n);
+}
+
+// TODO: global registration of TslFloat
+
+TVM_REGISTER_NODE_TYPE(TslFloatImmNode);
+
+TVM_STATIC_IR_FUNCTOR(ReprPrinter, vtable)
+    .set_dispatch<TslFloatImmNode>([](const ObjectRef& node, ReprPrinter* p) {
+      auto* op = static_cast<const TslFloatImmNode*>(node.get());
+      auto& stream = p->stream;
+      stream << "TslFloat(";
+      switch (op->dtype.bits()) {
+        case 64:
+          stream << op->value;
+          break;
+        case 32:
+          stream << op->value << 'f';
+          break;
+        case 16:
+          stream << op->value << 'h';
+          break;
+        default:
+          LOG(FATAL) << "Unknown float type bits=" << op->dtype.bits();
+      }
+      stream << ")";
+    });
 
 TslVar::TslVar(String name_hint, DataType dtype) {
    auto n = make_object<TslVarNode>();
