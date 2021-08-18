@@ -99,10 +99,11 @@ void InferRootBound(const Stage& stage, const GraphContext& ctx,
     for (auto iv : stage->op->root_iter_vars()) {
       CHECK(iv->dom.defined());
       CHECK(!rmap->count(iv));
-      (*rmap)[iv] = iv->dom;
+      (*rmap)[iv] = iv->dom; //直接采用placeholder和输出级的rootvars的dom
     }
     return;
   }
+  // 对于输出和placeholder一切到此为止
   // The tensor domain.
   std::unordered_map<Tensor, TensorDom> tmap;
   // The consumers of the op.
@@ -206,8 +207,8 @@ void InferRootBound(const Stage& stage, const GraphContext& ctx,
 
 Map<IterVar, Range> InferBound(const Schedule& sch) {
   // Prepare context
-  GraphContext ctx;
-  Array<Operation> roots;
+  GraphContext ctx; //传递到inferrootbound
+  Array<Operation> roots; //只用于创建readgraph->feedgraph 没有其他作用
   arith::Analyzer analyzer;
 
   for (Operation op : sch->outputs) {
@@ -224,18 +225,19 @@ Map<IterVar, Range> InferBound(const Schedule& sch) {
     }
     ctx.op2stage_[stage->op.get()] = stage;
   }
-  ctx.attach_path = CreateAttachPath(sch);
+  ctx.attach_path = CreateAttachPath(sch); //和inferbound文档中描述的一样，得到的是每个stage递归的attach路径
+  //attach_path: using AttachPath = Map<Operation, Array<IterVar> >;
   // Run inference.
   std::unordered_map<IterVar, Range> ret;
   for (size_t i = sch->stages.size(); i != 0; --i) {
-    const Stage& stage = sch->stages[i - 1];
+    const Stage& stage = sch->stages[i - 1]; //反DFS序做inferbound
     InferRootBound(stage, ctx, &ret);
 
     // bind bound of root iter vars.
     for (auto iv : stage->op->root_iter_vars()) {
       auto it = ret.find(iv);
       if (it != ret.end()) {
-        analyzer.Bind(iv->var, it->second);
+        analyzer.Bind(iv->var, it->second); //分析器绑定某个变量到一个区间
       }
     }
 
@@ -246,7 +248,7 @@ Map<IterVar, Range> InferBound(const Schedule& sch) {
       ret[iv] = iv->dom;
     }
   }
-  for (auto& p : ret) {
+  for (auto& p : ret) { //化简
     ret[p.first] =
         Range::FromMinExtent(analyzer.Simplify(p.second->min), analyzer.Simplify(p.second->extent));
   }

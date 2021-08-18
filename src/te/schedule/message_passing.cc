@@ -101,8 +101,8 @@ void PassDownDomain(const Stage& stage, std::unordered_map<IterVar, Range>* p_st
     return actx->Simplify(b);
   };
 
-  std::unordered_map<IterVar, bool> dominating_thread;
-  PassUpThreadBinding(stage, &dominating_thread);
+  std::unordered_map<IterVar, bool> dominating_thread; //这个map记录某个iv是否被绑定到线程上
+  PassUpThreadBinding(stage, &dominating_thread);   //由于绑定总是发生在叶iv，因此向上传递绑定关系
 
   auto& state = *p_state;
   // forwar iteration on relations

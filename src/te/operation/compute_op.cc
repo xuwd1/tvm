@@ -120,9 +120,6 @@ Tensor compute(Array<PrimExpr> shape, TSLCompute fcompute, std::string name, std
     axis.emplace_back(IterVar(Range(0, 1), Var(os.str(), shape[i].dtype()), kDataPar));
     args.push_back(axis.back()->var);
 
-    // TODO:
-    //关于这个函数：其应当返回一个设置了axis长度都是1，但in/out的e/ushape都初始化为shape/1的op,因此去改compute的构造函数！
-    //另外考虑加一个吧tensor直接变成Tslexpr的类型转换函数，这样就比较优雅，TSLCompute就可以是TslExpr了！
   }
   return ComputeOp(name, tag, attrs, axis, shape, Array<PrimExpr>(ndim, 1), shape,
                    Array<PrimExpr>(ndim, 1), shape, {fcompute(args)})
