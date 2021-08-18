@@ -53,7 +53,7 @@ struct GraphContext {
 
 bool NeedRelax(const IterVar& iv, bool found_attach,
                const std::unordered_map<IterVar, IterVar>& bind_map,
-               const runtime::StorageScope& scope) {
+               const runtime::StorageScope& storagescope) {
   auto it = bind_map.find(iv);
   const std::string& tag = (it != bind_map.end() ? it->second->thread_tag : iv->thread_tag);
   if (tag.length() == 0 || tag == "pipeline") {
@@ -63,10 +63,10 @@ bool NeedRelax(const IterVar& iv, bool found_attach,
 
   // When there is warp memory
   // threadIdx.x must be set to be warp index.
-  if (scope.rank == StorageRank::kWarp && ts.rank == 1 && ts.dim_index == 0) {
+  if (storagescope.rank == StorageRank::kWarp && ts.rank == 1 && ts.dim_index == 0) {
     return true;
   }
-  return static_cast<int>(scope.rank) <= ts.rank;
+  return static_cast<int>(storagescope.rank) <= ts.rank;
 }
 
 // infer storage scope, if not given
