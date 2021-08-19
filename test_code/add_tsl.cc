@@ -96,5 +96,24 @@ int main() {
   Array<tir::IterVar> ret2;
   sch[D].decompose({16, 16},ret2);
   cout << ret2 << endl;
+  tir::IterVar ret2outer, ret2inner;
+  sch[D].split(ret2[1], 2, &ret2outer, &ret2inner);
+  sch.normalize();
+  auto map = te::InferBound(sch);
+  for (auto& stackentry : sch[D]->decomp_stack) {
+    cout << "level:"<< stackentry.level << endl;
+    cout << "leftvars:" << endl;
+    for (auto& lvar : stackentry.left_ivars) {
+      cout << lvar << ":" << map[lvar] << endl;
+    }
+    cout << "rightvars:" << endl;
+    for (auto& rvar : stackentry.right_ivars) {
+      cout << rvar << ":" << map[rvar] << endl;
+    }
+  }
+  cout << ret2outer << ":" << map[ret2outer] << endl;
+  cout << ret2inner << ":" << map[ret2inner] << endl;
+
+
   // printDecompDBGInfo(sch[D].operator->());
 }

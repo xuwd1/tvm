@@ -57,7 +57,7 @@ TVM_DLL void AutoInlineInjective(Schedule sch);
  * \param sch The root schedule to infer all the bounds.
  * \return the result bound of the iteration Variable
  */
-Map<IterVar, Range> InferBound(const Schedule& sch);
+TVM_DLL Map<IterVar, Range> InferBound(const Schedule& sch);
 
 /*!
  * \brief Verify if there is any argument bound to compact buffer.

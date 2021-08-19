@@ -381,7 +381,7 @@ class Schedule : public ObjectRef {
    *
    * \return A normalized schedule, can be same as current one.
    */
-  Schedule normalize();
+  TVM_DLL Schedule normalize();
   /*!
    * \brief access the internal node container
    * \return the pointer to the internal node container
