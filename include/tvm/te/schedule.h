@@ -680,6 +680,8 @@ class StageNode : public Object {
   Stage group;
   /*! \brief Number of direct child stages, only used for group stage.*/
   int num_child_stages{0};
+
+  bool is_tsl_stage{false};
   /*!
    * \brief The decomposition stack
    *  The decomp stack is used to track the hierarchy of decomposition
