@@ -6,11 +6,11 @@
 #include <tvm/tsl/tir/expr.h>
 // #include <tvm/tir/buffer.h>
 
-#include <tvm/tir/stmt_functor.h>
-
-// #include <tvm/tir/expr.h>
 #include <tvm/node/repr_printer.h>
 #include <tvm/runtime/c_runtime_api.h>
+#include <tvm/tir/expr.h>
+#include <tvm/tir/stmt_functor.h>
+#include <tvm/tir/var.h>
 
 #include <fstream>
 #include <iostream>
@@ -42,14 +42,9 @@ void printDecompDBGInfo(te::StageNode* stage) {
   cout << stage->leaf_iter_vars << endl;
 }
 
-    int main() {
+int main() {
   const int M = 512;
   const int N = 256;
-  arith::Analyzer ana;
-  auto imm1 = PrimExpr(1L);
-  auto imm2 = PrimExpr(1L);
-  auto immadd = imm1 + imm2;
-  cout << ana.Simplify(immadd) << endl;
 
   te::Tensor A = te::Tslplaceholder({M, N}, DataType::Float(32), "A");
   te::Tensor B = te::Tslplaceholder({M, N}, DataType::Float(32), "B");
@@ -89,16 +84,17 @@ void printDecompDBGInfo(te::StageNode* stage) {
       }),
       "tsladd(Y,(A+B+X))");
 
-  auto& x = E->op->attrs;
 
-  cout << x << endl;
-  cout << x.count("TslOp") << endl;
 
   auto sch = te::create_schedule({E->op});
   cout << sch->stages << endl;
-  printDecompDBGInfo(sch[D].operator->());
-  sch[D].decompose({32, 32});
-  printDecompDBGInfo(sch[D].operator->());
-  sch[D].decompose({16, 16});
-  printDecompDBGInfo(sch[D].operator->());
-    }
+  // printDecompDBGInfo(sch[D].operator->());
+  Array<tir::IterVar> ret1;
+  sch[D].decompose({32, 32}, ret1);
+  cout << ret1 << endl;
+      // printDecompDBGInfo(sch[D].operator->());
+  Array<tir::IterVar> ret2;
+  sch[D].decompose({16, 16},ret2);
+  cout << ret2 << endl;
+  // printDecompDBGInfo(sch[D].operator->());
+}

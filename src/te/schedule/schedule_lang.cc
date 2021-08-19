@@ -523,7 +523,7 @@ void decompStackPushHelper(StageNode* self, const Array<PrimExpr>& factors, cons
 
 }
 
-Stage& Stage::decompose(Array<PrimExpr> factors) {
+Stage& Stage::decompose(Array<PrimExpr> factors, Array<IterVar>& ret_ivars) {
   StageNode* self = operator->();
   std::cout << "DECOMPOSING:" << self->op << std::endl;
   Operation self_op = self->op;
@@ -561,6 +561,7 @@ Stage& Stage::decompose(Array<PrimExpr> factors) {
     // stage 2: handle stage's itervar information properly
     //!!!!CURRENTLY, SHOULD ALWAYS DECOMPOSE BEFORE MAKING ANY OTHER SCHEDULING!!!
     decompStackPushHelper(self, factors, new_axis);
+    ret_ivars = self->decomp_stack.back().right_ivars;
 
     // stage 3: update stage's op and update reader operations 
     self->op = new_op;
@@ -849,10 +850,10 @@ Schedule::Schedule(Array<Operation> ops) {
       stage = Stage(op, this->operator->());  // xjx: tsl modification, let stagenode hold a
                                               // scheduleNode* pointer, by this we can call
                                               // createreliablereadGraph inside stage methods.
+      stage->is_tsl_stage = true;
     } else {
       stage = Stage(op);
     }
-    std::cout << stage->decomp_stack.size() << std::endl;
     stage->is_output = output_set.count(op) != 0;
     n->stages.push_back(stage);
     n->stage_map.Set(op, stage);

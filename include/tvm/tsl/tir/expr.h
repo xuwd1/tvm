@@ -241,7 +241,7 @@ class TslReduceNode : public TslExprNode {
   TVM_DECLARE_FINAL_OBJECT_INFO(TslReduceNode, TslExprNode);
 };
 
-class TslReduce : TslExpr {
+class TslReduce : public TslExpr {
  public:
   TVM_DLL TslReduce(TslCommReducer combiner, Array<TslExpr> src, Array<IterVar> rdom,
                     PrimExpr condition, int value_index, Array<TslExpr> init);

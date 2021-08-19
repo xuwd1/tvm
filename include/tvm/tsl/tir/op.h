@@ -12,6 +12,9 @@
 #include <type_traits>
 
 namespace tvm {
+namespace tir {
+
+
 
 TVM_DLL TslExpr gemm(tir::TslExpr src, Array<tir::IterVar> axis, Array<tir::TslExpr> init = {});
 
@@ -27,7 +30,7 @@ inline TslExpr make_tslzero(DataType t) {
   LOG(FATAL) << "cannot make tslzero for " << t;
   return TslExpr();
 }
-
+}  // namespace tir
 }
 
 

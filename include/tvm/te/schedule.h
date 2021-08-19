@@ -257,7 +257,7 @@ class Stage : public ObjectRef {
    * \brief whether the stage has been scheduled.
    * \return whether the stage has been scheduled.
    */
-  TVM_DLL Stage& decompose(Array<PrimExpr> factors);
+  TVM_DLL Stage& decompose(Array<PrimExpr> factors, Array<IterVar>& ret_ivars);
 
   bool is_scheduled() const;
   /*!

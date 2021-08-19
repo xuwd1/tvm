@@ -154,6 +154,7 @@ class ExprFunctor<R(const PrimExpr& n, Args...)> {
   // TslExprs
   virtual R VisitExpr_(const TslAddNode* op, Args... args) EXPR_FUNCTOR_DEFAULT;
   virtual R VisitExpr_(const TslProducerLoadNode* op, Args... args) EXPR_FUNCTOR_DEFAULT;
+  virtual R VisitExpr_(const TslVarNode* op, Args... args) EXPR_FUNCTOR_DEFAULT;
   virtual R VisitExprDefault_(const Object* op, Args...) {
     LOG(FATAL) << "Do not have a default for " << op->GetTypeKey();
     return R();
@@ -202,6 +203,7 @@ class ExprFunctor<R(const PrimExpr& n, Args...)> {
     // TslExprs
     IR_EXPR_FUNCTOR_DISPATCH(TslAddNode);
     IR_EXPR_FUNCTOR_DISPATCH(TslProducerLoadNode);
+    IR_EXPR_FUNCTOR_DISPATCH(TslVarNode);
     return vtable;
   }
 };
@@ -305,8 +307,10 @@ class TVM_DLL ExprMutator : protected ExprFunctor<PrimExpr(const PrimExpr&)> {
   PrimExpr VisitExpr_(const StringImmNode* op) override;
   PrimExpr VisitExpr_(const AnyNode* op) override;
   //TslExprs
-  PrimExpr VisitExpr_(const TslProducerLoadNode* op);
-  PrimExpr VisitExpr_(const TslAddNode* op);
+  PrimExpr VisitExpr_(const TslProducerLoadNode* op) override;
+  PrimExpr VisitExpr_(const TslAddNode* op) override;
+  
+  PrimExpr VisitExpr_(const TslVarNode* op) override;
 };
 
 }  // namespace tir

@@ -1,6 +1,6 @@
 #include <tvm/runtime/registry.h>
 #include <tvm/tir/stmt_functor.h>
-#include <tvm/tir/tsl/stmt_functor.h>
+#include <tvm/tsl/tir/stmt_functor.h>
 
 #include <functional>
 #include <tvm/tir/functor_common.h>
@@ -51,7 +51,7 @@ class TslIRSubstitue : public StmtExprMutator {
 };
 
 TslExpr Substitute(TslExpr expr, std::function<Optional<TslExpr>(const TslVar& var)> vmap) {
-  return TslIRSubstitue(vmap)(std::move(expr));
+  return Downcast<TslExpr>(TslIRSubstitue(vmap)(std::move(expr)));
 }
 
 

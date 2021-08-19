@@ -17,7 +17,7 @@ TslExpr gemm(tir::TslExpr src, Array<tir::IterVar> axis, Array<tir::TslExpr> ini
   TslExpr result = TslAdd(x, y);
   TslExpr identity = make_tslzero(src.dtype());
   TslCommReducer combiner = TslCommReducer({x}, {y}, {result}, {identity});
-  return TslReduce(combiner, {src}, axis, make_const(DataType::Bool(1)) , 0, init);
+  return TslReduce(combiner, {src}, axis, make_const(DataType::Bool(1),true) , 0, init);
 }
 
 }  // namespace tvm

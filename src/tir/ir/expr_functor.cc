@@ -339,6 +339,7 @@ PrimExpr ExprMutator::VisitExpr_(const TslAddNode* op) {
     return TslAdd(TslRuntimeDowncast(a), TslRuntimeDowncast(b));
   }
 }
+PrimExpr ExprMutator::VisitExpr_(const TslVarNode* op) { return GetRef<TslExpr>(op); }
 
 
 }  // namespace tir
