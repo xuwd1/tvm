@@ -370,7 +370,9 @@ add_library(tvm_runtime SHARED $<TARGET_OBJECTS:tvm_runtime_objs>)
 set_property(TARGET tvm_runtime APPEND PROPERTY LINK_OPTIONS "${TVM_VISIBILITY_FLAGS}")
 
 add_executable(tsl_add test_code/add_tsl.cc)
+add_executable(tsl_gemm test_code/gemm_tsl.cc)
 target_link_libraries(tsl_add tvm)
+target_link_libraries(tsl_gemm tvm)
 if(USE_MICRO)
   # NOTE: cmake doesn't track dependencies at the file level across subdirectories. For the
   # Unix Makefiles generator, need to add these explicit target-level dependency)
@@ -418,6 +420,7 @@ if(USE_THREADS AND NOT BUILD_FOR_HEXAGON)
   target_link_libraries(tvm PUBLIC Threads::Threads)
   target_link_libraries(tvm_runtime PUBLIC Threads::Threads)
   target_link_libraries(tsl_add Threads::Threads)
+  target_link_libraries(tsl_gemm Threads::Threads)
 endif()
 
 target_link_libraries(tvm PRIVATE ${TVM_LINKER_LIBS} ${TVM_RUNTIME_LINKER_LIBS})

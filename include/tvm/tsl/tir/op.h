@@ -12,12 +12,14 @@
 #include <type_traits>
 
 namespace tvm {
+
+
+
+
+TVM_DLL tir::TslExpr tsl_sum(tir::TslExpr src, Array<tir::IterVar> axis, Array<tir::TslExpr> init = {});
+
+
 namespace tir {
-
-
-
-TVM_DLL TslExpr gemm(tir::TslExpr src, Array<tir::IterVar> axis, Array<tir::TslExpr> init = {});
-
 inline TslExpr make_tslzero(DataType t) { 
   CHECK(t.is_scalar());
   CHECK(!t.is_handle());

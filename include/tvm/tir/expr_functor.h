@@ -155,6 +155,8 @@ class ExprFunctor<R(const PrimExpr& n, Args...)> {
   virtual R VisitExpr_(const TslAddNode* op, Args... args) EXPR_FUNCTOR_DEFAULT;
   virtual R VisitExpr_(const TslProducerLoadNode* op, Args... args) EXPR_FUNCTOR_DEFAULT;
   virtual R VisitExpr_(const TslVarNode* op, Args... args) EXPR_FUNCTOR_DEFAULT;
+  virtual R VisitExpr_(const TslGemmNode* op, Args... args) EXPR_FUNCTOR_DEFAULT;
+  virtual R VisitExpr_(const TslReduceNode* op, Args... args) EXPR_FUNCTOR_DEFAULT;
   virtual R VisitExprDefault_(const Object* op, Args...) {
     LOG(FATAL) << "Do not have a default for " << op->GetTypeKey();
     return R();
@@ -204,6 +206,8 @@ class ExprFunctor<R(const PrimExpr& n, Args...)> {
     IR_EXPR_FUNCTOR_DISPATCH(TslAddNode);
     IR_EXPR_FUNCTOR_DISPATCH(TslProducerLoadNode);
     IR_EXPR_FUNCTOR_DISPATCH(TslVarNode);
+    IR_EXPR_FUNCTOR_DISPATCH(TslGemmNode);
+    IR_EXPR_FUNCTOR_DISPATCH(TslReduceNode);
     return vtable;
   }
 };
@@ -259,6 +263,9 @@ class TVM_DLL ExprVisitor : public ExprFunctor<void(const PrimExpr&)> {
   // TslExprs
   void VisitExpr_(const TslAddNode* op) override;
   void VisitExpr_(const TslProducerLoadNode* op) override;
+  void VisitExpr_(const TslVarNode* op) override;
+  void VisitExpr_(const TslGemmNode* op) override;
+  void VisitExpr_(const TslReduceNode* op) override;
 };
 
 /*!

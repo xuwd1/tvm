@@ -126,6 +126,24 @@ void ExprVisitor::VisitExpr_(const TslProducerLoadNode* op){
   VisitArray(op->indices, [this](const PrimExpr& e) { this->VisitExpr(e); });
 }
 
+void ExprVisitor::VisitExpr_(const TslGemmNode* op) {
+  this->VisitExpr(op->a);
+  this->VisitExpr(op->b);
+}
+
+void ExprVisitor::VisitExpr_(const TslVarNode* op) {}
+
+void ExprVisitor::VisitExpr_(const TslReduceNode* op) {
+  VisitArray(op->axis, [this](const IterVar& r) {
+    this->VisitExpr(r->dom->min);
+    this->VisitExpr(r->dom->extent);
+  });
+  VisitArray(op->source, [this](const PrimExpr& e) { this->VisitExpr(e); });
+  if (!op->init.empty()) {
+    VisitArray(op->init, [this](const PrimExpr& e) { this->VisitExpr(e); });
+  }
+  this->VisitExpr(op->condition);
+}
 
 
 PrimExpr ExprMutator::VisitExpr_(const VarNode* op) { return GetRef<PrimExpr>(op); }

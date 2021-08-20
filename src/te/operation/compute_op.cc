@@ -60,6 +60,14 @@ inline bool ReduceEqual(const tir::ReduceNode* a, const tir::ReduceNode* b) {
          ((a->init.empty() && b->init.empty()) || (a->init.same_as(b->init)));
 }
 
+static void VerifyTslComputeOp(const ComputeOpNode* op);
+
+inline bool TslReduceEqual(const tir::TslReduceNode* a, const tir::TslReduceNode* b) {
+  return (a->combiner.same_as(b->combiner)) && (a->source.same_as(b->source)) &&
+         (a->axis.same_as(b->axis)) && (a->condition.same_as(b->condition)) &&
+         ((a->init.empty() && b->init.empty()) || (a->init.same_as(b->init)));
+}
+
 int ComputeOpNode::num_outputs() const { return body.size(); }
 
 Array<IterVar> BaseComputeOpNode::root_iter_vars() const {
@@ -78,7 +86,7 @@ DataType ComputeOpNode::output_dtype(size_t idx) const {
 Array<PrimExpr> BaseComputeOpNode::output_shape(size_t idx) const {
   CHECK_LT(idx, num_outputs());
   // for now, all outputs of a BaseComputeOp have the same shape
-  if (attrs.count("TslOp")==0) {
+  if (attrs.count("TslOp") == 0) {
     Array<PrimExpr> shape;
     for (const auto& ivar : this->axis) {
       const Range& r = ivar->dom;
@@ -119,7 +127,6 @@ Tensor compute(Array<PrimExpr> shape, TSLCompute fcompute, std::string name, std
     os << "ax" << i;
     axis.emplace_back(IterVar(Range(0, 1), Var(os.str(), shape[i].dtype()), kDataPar));
     args.push_back(axis.back()->var);
-
   }
   return ComputeOp(name, tag, attrs, axis, shape, Array<PrimExpr>(ndim, 1), shape,
                    Array<PrimExpr>(ndim, 1), shape, {fcompute(args)})
@@ -189,11 +196,11 @@ ComputeOp::ComputeOp(std::string name, std::string tag, Map<String, ObjectRef> a
   n->out_eshape = std::move(out_eshape);
   n->in_ushape = std::move(in_ushape);
   n->in_eshape = std::move(in_eshape);
-  if (n->body[0]->IsInstance<tir::ReduceNode>()) {  // TODO: investigate
-    const tir::ReduceNode* reduce = n->body[0].as<tir::ReduceNode>();
+  if (n->body[0]->IsInstance<tir::TslReduceNode>()) {  // TODO: investigate
+    const tir::TslReduceNode* reduce = n->body[0].as<tir::TslReduceNode>();
     n->reduce_axis = reduce->axis;
   }
-  VerifyComputeOp(n.get());
+  VerifyTslComputeOp(n.get());
   // TODO:visitors needs to be modified to support TslExprs.
   data_ = std::move(n);
 }
@@ -263,13 +270,11 @@ Operation ComputeOpNode::ReplaceInputs(const Operation& self,
                        Downcast<Array<TslExpr>>(arr));
     } else {
       return ComputeOp(this->name, this->tag, this->attrs, this->axis, arr);
-    }   
+    }
   } else {
     return self;
   }
 }
-
-
 
 void ComputeOpNode::PropBoundToInputs(const Operation& self, arith::Analyzer* analyzer,
                                       const std::unordered_map<const VarNode*, IntSet>& dom_map,
@@ -429,10 +434,10 @@ Stmt MakeComputeStmt(const ComputeOpNode* self, const Stage& stage,
     init = MergeNest(n.init_nest, init);
     init = Substitute(init, n.init_vmap);
     // common nest
-    std::vector<std::vector<Stmt> > common(n.main_nest.begin(),
-                                           n.main_nest.begin() + n.num_common_loop + 1);
-    std::vector<std::vector<Stmt> > reduce(n.main_nest.begin() + n.num_common_loop + 1,
-                                           n.main_nest.end());
+    std::vector<std::vector<Stmt>> common(n.main_nest.begin(),
+                                          n.main_nest.begin() + n.num_common_loop + 1);
+    std::vector<std::vector<Stmt>> reduce(n.main_nest.begin() + n.num_common_loop + 1,
+                                          n.main_nest.end());
     provide = MergeNest(reduce, provide);
     if (debug_keep_trivial_loop) {
       provide = MergeNest(common, provide);
@@ -632,9 +637,79 @@ class ComputeVerifier final : protected tir::ExprVisitor {
 };
 }  // namespace
 
+namespace {
+/*!
+ * \brief Verify if ComputeOp is valid with respect to Reduce operations.
+ *
+ *  The following two properties are verified:
+ *  (1) All Reduce operations must exist at top level.
+ *  (2) For a list of operations, if one is Reduce, then the others
+ *      must be Reduce as well; and their inputs should have the
+ *      same attribute except value_index.
+ */
+class TslComputeVerifier final : protected tir::ExprVisitor {
+ public:
+  /// Special member functions
+  //@{
+  explicit TslComputeVerifier(const ComputeOpNode* compute)
+      : compute_(compute), reduce_(compute->body[0].as<tir::TslReduceNode>()) {}
+  virtual ~TslComputeVerifier() = default;
+  TslComputeVerifier(const TslComputeVerifier&) = delete;
+  TslComputeVerifier(TslComputeVerifier&&) = delete;
+  TslComputeVerifier& operator=(const TslComputeVerifier&) = delete;
+  TslComputeVerifier& operator=(TslComputeVerifier&&) = delete;
+  //@}
+
+  /// Interface to perform compute verification
+  void Run() {
+    for (const PrimExpr e : compute_->body) {
+      // Check for consistency of top level reductions
+      const tir::TslReduceNode* reduce = e.as<tir::TslReduceNode>();
+      CHECK((reduce && reduce_) || (!reduce && !reduce_)) << "All ComputeOp should be consistent "
+                                                          << "with being Reduce operation or not.";
+
+      if (reduce && reduce_) {
+        CHECK(TslReduceEqual(reduce, reduce_)) << "The Reduce inputs of ComputeOp should "
+                                               << "have the same attribute except value_index";
+      }
+
+      level_ = 0;
+      ExprVisitor::VisitExpr(e);
+    }
+  }
+
+ protected:
+  /// Visitor implementation
+  //@{
+  void VisitExpr(const PrimExpr& n) final {
+    ++level_;
+    ExprVisitor::VisitExpr(n);
+    --level_;
+  }
+
+  void VisitExpr_(const tir::TslReduceNode* op) final {
+    // Check for non top level reductions
+    CHECK(0 == level_) << "Reductions are only allowed at the top level of compute. "
+                       << "Please create another tensor for further composition.";
+  }
+  //@}
+
+ private:
+  const ComputeOpNode* compute_{nullptr};      ///< ComputeOpNode to verify
+  const tir::TslReduceNode* reduce_{nullptr};  ///< Top level Reduce operation
+  int level_{0};                               ///< Level of op being processed
+};
+}  // namespace
+
 /// Verify if ComputeOp is valid with respect to Reduce operations.
 static void VerifyComputeOp(const ComputeOpNode* op) {
   ComputeVerifier v(op);
+  v.Run();
+}
+
+static void VerifyTslComputeOp(const ComputeOpNode* op) {
+  CHECK(op->attrs.count("TslOp") != 0) << "\" TslOp \" not in attrs";
+  TslComputeVerifier v(op);
   v.Run();
 }
 

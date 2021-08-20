@@ -11,7 +11,7 @@
 namespace tvm {
 using namespace tir;
 
-TslExpr gemm(tir::TslExpr src, Array<tir::IterVar> axis, Array<tir::TslExpr> init) {
+TVM_DLL TslExpr tsl_sum(tir::TslExpr src, Array<tir::IterVar> axis, Array<tir::TslExpr> init) {
   CHECK(src.dtype().lanes() == 1);
   TslVar x("x", src.dtype()), y("y", src.dtype());
   TslExpr result = TslAdd(x, y);

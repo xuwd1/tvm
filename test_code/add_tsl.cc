@@ -75,12 +75,12 @@ int main() {
 
   te::Tensor D = te::compute(
       {M, N}, std::function<te::TslExpr(tir::Var, tir::Var)>([=](tir::Var i, tir::Var j) {
-        return te::TslAdd(C.TslPLoad({i, j}), X.TslPLoad({i, j}));
+        return tir::TslAdd(C.TslPLoad({i, j}), X.TslPLoad({i, j}));
       }),
       "tsladd(X,(A+B))");
   te::Tensor E = te::compute(
       {M, N}, std::function<te::TslExpr(tir::Var, tir::Var)>([=](tir::Var i, tir::Var j) {
-        return te::TslAdd(D.TslPLoad({i, j}), Y.TslPLoad({i, j}));
+        return tir::TslAdd(D.TslPLoad({i, j}), Y.TslPLoad({i, j}));
       }),
       "tsladd(Y,(A+B+X))");
 

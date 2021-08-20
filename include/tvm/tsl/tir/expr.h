@@ -288,6 +288,17 @@ class TslAdd : public TslExpr {
   TVM_DEFINE_OBJECT_REF_METHODS(TslAdd, TslExpr, TslAddNode);
 };
 
+class TslGemmNode : public TslBinaryOpNode<TslGemmNode> {
+ public:
+  static constexpr const char* _type_key = "tir.TslGemmw";
+};
+
+class TslGemm : public TslExpr {
+ public:
+  TVM_TSL_DECLARE_BINOP_CONSTRUCTOR(TslGemm);
+  TVM_DEFINE_OBJECT_REF_METHODS(TslGemm, TslExpr, TslGemmNode);
+};
+
 class TslProducerLoadNode : public TslExprNode {
  public:
   /*! \brief The buffer producer. */

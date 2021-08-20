@@ -220,6 +220,25 @@ TVM_REGISTER_GLOBAL("tir.TslAdd").set_body_typed([](TslExpr a, TslExpr b) {
   return TslAdd(a, b);
 });
 
+//TslGemm
+
+TVM_DEFINE_BINOP_CONSTRUCTOR(TslGemm);
+
+
+TVM_REGISTER_NODE_TYPE(TslGemmNode);
+
+TVM_STATIC_IR_FUNCTOR(ReprPrinter, vtable)
+    .set_dispatch<TslGemmNode>([](const ObjectRef& node, ReprPrinter* p) {
+      auto* op = static_cast<const TslGemmNode*>(node.get());
+      p->stream << "TslGemm(";
+      p->Print(op->a);
+      p->stream << ", ";
+      p->Print(op->b);
+      p->stream << ')';
+    });
+
+TVM_REGISTER_GLOBAL("tir.TslGemm").set_body_typed([](TslExpr a, TslExpr b) { return TslGemm(a, b); });
+
 // ProducerLoad
 TslProducerLoad::TslProducerLoad(DataProducer producer, Array<PrimExpr> indices) {
   ObjectPtr<TslProducerLoadNode> node = make_object<TslProducerLoadNode>();
