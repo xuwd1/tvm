@@ -30,6 +30,10 @@
 
 #include "graph.h"
 
+#define TSL_DBG_V0 0
+#define TSL_DBG_V1 1
+
+
 namespace tvm {
 namespace te {
 
@@ -107,6 +111,7 @@ Stage::Stage(Operation op) {
   data_ = std::move(n);
 }
 
+#if TSL_DBG_V0
 Stage::Stage(Operation op, ScheduleNode* schedptr) {
   // TODO: NO IDEA WETHER THIS WOULD WORK FOR SCANOP!!!!
   auto n = make_object<StageNode>();
@@ -140,6 +145,43 @@ Stage::Stage(Operation op, ScheduleNode* schedptr) {
   n->decomp_stack.push_back(entry);
   data_ = std::move(n);
 }
+#endif
+
+#if TSL_DBG_V1
+Stage::Stage(Operation op, ScheduleNode* schedptr) {
+  // TODO: NO IDEA WETHER THIS WOULD WORK FOR SCANOP!!!!
+  auto n = make_object<StageNode>();
+  n->op = op;
+  n->origin_op = op;
+  n->parent_sched = schedptr;
+  auto root_iter_vars = op->root_iter_vars();  // axis first, then reduce axis
+  auto entry = StageNode::DecompEntry();
+  entry.factors = op->output_elemshape(0);
+  entry.level = 0;
+  for (auto v : root_iter_vars) {
+    n->all_iter_vars.push_back(v);
+    if (v->iter_type != kOpaque) {
+      std::ostringstream os;
+      os << "." << n->decomp_stack.size();
+      auto prefix = os.str();
+      IterVar left = IterVar(Range(), v->var.copy_with_suffix(prefix + "L"), v->iter_type);
+      IterVar right = IterVar(Range(), v->var.copy_with_suffix(prefix + "R"), v->iter_type);
+      n->all_iter_vars.push_back(left);
+      n->all_iter_vars.push_back(right);
+      n->leaf_iter_vars.push_back(left);
+      n->leaf_iter_vars.push_back(right);
+      auto split = Split(v, right, left, PrimExpr(), 1);
+      n->relations.push_back(split);
+
+      entry.left_ivars.push_back(left);
+      entry.right_ivars.push_back(right);
+      entry.split_relations.push_back(split);
+    }
+  }
+  n->decomp_stack.push_back(entry);
+  data_ = std::move(n);
+}
+#endif
 
 bool Stage::is_scheduled() const {
   const StageNode* n = operator->();
@@ -472,6 +514,18 @@ void printreadgraph(te::ReadGraph rg) {
 
 /////////////////DEBUG/////////////
 
+#if TSL_DBG_V1
+Stage& Stage::decompose(Array<PrimExpr> factors, Array<IterVar>& ret_ivars) { 
+  arith::Analyzer ana; 
+
+}
+#endif
+
+
+
+
+#if TSL_DBG_V0
+
 void decompStackPushHelper(StageNode* self, const Array<PrimExpr>& factors, const Array<IterVar>& new_axis) {
   auto& stacktop = self->decomp_stack.back();
   CHECK_EQ(factors.size(), stacktop.left_ivars.size());
@@ -620,6 +674,8 @@ Stage& Stage::decompose(Array<PrimExpr> factors, Array<IterVar>& ret_ivars) {
 
   return *this;
 }  // namespace te
+
+#endif
 
 Stage CopyStage(const Stage& s) {
   ObjectPtr<StageNode> n = make_object<StageNode>(*s.operator->());

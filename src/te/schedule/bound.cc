@@ -99,7 +99,7 @@ void InferRootBound(const Stage& stage, const GraphContext& ctx,
     for (auto iv : stage->op->root_iter_vars()) {
       CHECK(iv->dom.defined());
       CHECK(!rmap->count(iv));
-      (*rmap)[iv] = iv->dom; //直接采用placeholder和输出级的rootvars的dom
+      (*rmap)[iv] = iv->dom;  //直接采用placeholder和输出级的rootvars的dom
     }
     return;
   }
@@ -129,6 +129,13 @@ void InferRootBound(const Stage& stage, const GraphContext& ctx,
   //
   Array<IterVar> stage_attach = ctx.attach_path.at(stage->op);
   // The parent set.
+  std::cout << "IM" << stage << std::endl;
+
+  std::cout << "consumers" << std::endl;
+  for (const Operation& op : consumers) 
+  {
+    std::cout << op << std::endl;
+  }
   for (const Operation& op : consumers) {
     Map<Var, IntSet> relax_set;
     std::unordered_map<IterVar, IntSet> up_state;
@@ -178,6 +185,11 @@ void InferRootBound(const Stage& stage, const GraphContext& ctx,
         << " along the loop nest specified by compute_at of consumer " << op;
     // Get the domain of the consumer
     PassUpDomain(op_stage, *rmap, &up_state);
+    std::cout << op_stage << std::endl;
+    for (auto& v : op_stage->all_iter_vars) {
+      std::cout << v << ":" << up_state[v] << std::endl;
+    }
+
     // Relax if needed.
     std::unordered_map<const VarNode*, IntSet> dom_map;
     arith::Analyzer analyzer;
@@ -207,8 +219,8 @@ void InferRootBound(const Stage& stage, const GraphContext& ctx,
 
 Map<IterVar, Range> InferBound(const Schedule& sch) {
   // Prepare context
-  GraphContext ctx; //传递到inferrootbound
-  Array<Operation> roots; //只用于创建readgraph->feedgraph 没有其他作用
+  GraphContext ctx;        //传递到inferrootbound
+  Array<Operation> roots;  //只用于创建readgraph->feedgraph 没有其他作用
   arith::Analyzer analyzer;
 
   for (Operation op : sch->outputs) {
@@ -225,19 +237,20 @@ Map<IterVar, Range> InferBound(const Schedule& sch) {
     }
     ctx.op2stage_[stage->op.get()] = stage;
   }
-  ctx.attach_path = CreateAttachPath(sch); //和inferbound文档中描述的一样，得到的是每个stage递归的attach路径
-  //attach_path: using AttachPath = Map<Operation, Array<IterVar> >;
+  ctx.attach_path =
+      CreateAttachPath(sch);  //和inferbound文档中描述的一样，得到的是每个stage递归的attach路径
+  // attach_path: using AttachPath = Map<Operation, Array<IterVar> >;
   // Run inference.
   std::unordered_map<IterVar, Range> ret;
   for (size_t i = sch->stages.size(); i != 0; --i) {
-    const Stage& stage = sch->stages[i - 1]; //反DFS序做inferbound
+    const Stage& stage = sch->stages[i - 1];  //反DFS序做inferbound
     InferRootBound(stage, ctx, &ret);
 
     // bind bound of root iter vars.
     for (auto iv : stage->op->root_iter_vars()) {
       auto it = ret.find(iv);
       if (it != ret.end()) {
-        analyzer.Bind(iv->var, it->second); //分析器绑定某个变量到一个区间
+        analyzer.Bind(iv->var, it->second);  //分析器绑定某个变量到一个区间
       }
     }
 
@@ -248,7 +261,7 @@ Map<IterVar, Range> InferBound(const Schedule& sch) {
       ret[iv] = iv->dom;
     }
   }
-  for (auto& p : ret) { //化简
+  for (auto& p : ret) {  //化简
     ret[p.first] =
         Range::FromMinExtent(analyzer.Simplify(p.second->min), analyzer.Simplify(p.second->extent));
   }

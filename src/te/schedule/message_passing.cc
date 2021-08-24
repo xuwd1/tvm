@@ -282,6 +282,7 @@ void PassUpDomain(const SplitNode* s, const std::unordered_map<IterVar, Range>& 
   if (dom_map.count(s->outer) && dom_map.count(s->inner) && dom_map.count(s->parent) &&
       outer.MatchRange(dom_map.at(s->outer)) && inner.MatchRange(dom_map.at(s->inner))) {
     *parent = IntSet::FromRange(dom_map.at(s->parent));
+    std::cout << "abortreturn" << std::endl;
     return;
   }
   PrimExpr factor = dom_map.at(s->inner)->extent;
