@@ -29,7 +29,7 @@
 #include <tvm/te/tensor.h>
 #include <tvm/te/tensor_intrin.h>
 #include <tvm/tir/expr.h>
-
+#include <tvm/tsl/tsl_debug.h>
 #include <string>
 #include <unordered_map>
 
@@ -686,11 +686,13 @@ class StageNode : public Object {
    * \brief The decomposition stack
    *  The decomp stack is used to track the hierarchy of decomposition
    */
+  #if TSL_DBG_V0
   std::vector<DecompEntry> decomp_stack;  // TODO: TVM object-rize this
-
+  
   //std::unordered_map<StageNode*, ReadShapeEntry>;
   std::unordered_map<Stage, ReadShapeEntry, ObjectPtrHash, ObjectPtrEqual> read_shape_map;
 
+  
   struct DecompEntry {
     Array<PrimExpr> factors;
     Array<IterVar> left_ivars;
@@ -713,6 +715,24 @@ class StageNode : public Object {
         : read_ushape(read_ushape), read_eshape(read_eshape), strides(strides), defined(true) {}
   };
 
+  
+  void SetOrUpdateReadShapeMap(Stage newstage, Stage oldstage, ReadShapeEntry entry) {
+    // 1. set readshapeentry
+    if (entry.defined) {
+      read_shape_map[newstage] = entry;
+    }
+    // 2. new stage inserted as provider, need to update map
+    else {
+      if (read_shape_map.find(oldstage) != read_shape_map.end()) {
+        read_shape_map[newstage] = read_shape_map[oldstage];
+        read_shape_map.erase(oldstage);
+      }
+    }
+  }
+
+
+  #endif
+
   void VisitAttrs(AttrVisitor* v) {
     v->Visit("op", &op);
     v->Visit("origin_op", &origin_op);
@@ -729,20 +749,6 @@ class StageNode : public Object {
     v->Visit("double_buffer",&double_buffer);
     v->Visit("group", &group);
     v->Visit("num_child_stages", &num_child_stages);
-  }
-
-  void SetOrUpdateReadShapeMap(Stage newstage, Stage oldstage, ReadShapeEntry entry) {
-    //1. set readshapeentry
-    if (entry.defined) {
-      read_shape_map[newstage] = entry;
-    }
-    //2. new stage inserted as provider, need to update map
-    else {
-      if (read_shape_map.find(oldstage) != read_shape_map.end()) {
-        read_shape_map[newstage] = read_shape_map[oldstage];
-        read_shape_map.erase(oldstage);
-      }
-    }
   }
 
 

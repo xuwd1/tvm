@@ -35,15 +35,15 @@ int main() {
   auto args = Array<te::Tensor>({A, B, C});
   std::unordered_map<te::Tensor, te::Buffer> binds;
   auto target = Target("llvm");
-  auto bounds = te::InferBound(sch);
+  /*auto bounds = te::InferBound(sch);
   for (auto& v : sch[C]->leaf_iter_vars) {
     cout << v << ":" << bounds[v] << endl;
   }
   cout << "B:" << endl;
   for (auto& v : sch[B]->leaf_iter_vars) {
     cout << v << ":" << bounds[v] << endl;
-  }
+  }*/
   //cout << bounds << endl;
-  // auto lowered = lower(sch, args, "func", binds);
-  // cout << lowered << endl;
+  auto lowered = lower(sch, args, "func", binds);
+  cout << lowered << endl;
 }

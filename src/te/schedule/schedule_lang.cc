@@ -24,14 +24,11 @@
 #include <tvm/runtime/registry.h>
 #include <tvm/te/operation.h>
 #include <tvm/te/schedule.h>
-
+#include <tvm/tsl/tsl_debug.h>
 #include <stack>
 #include <unordered_set>
 
 #include "graph.h"
-
-#define TSL_DBG_V0 0
-#define TSL_DBG_V1 1
 
 
 namespace tvm {
@@ -509,24 +506,18 @@ void printreadgraph(te::ReadGraph rg) {
     std::cout << std::endl;
   }
   std::cout << std::endl;
-  
 }
 
 /////////////////DEBUG/////////////
 
 #if TSL_DBG_V1
-Stage& Stage::decompose(Array<PrimExpr> factors, Array<IterVar>& ret_ivars) { 
-  arith::Analyzer ana; 
-
-}
+Stage& Stage::decompose(Array<PrimExpr> factors, Array<IterVar>& ret_ivars) { arith::Analyzer ana; }
 #endif
-
-
-
 
 #if TSL_DBG_V0
 
-void decompStackPushHelper(StageNode* self, const Array<PrimExpr>& factors, const Array<IterVar>& new_axis) {
+void decompStackPushHelper(StageNode* self, const Array<PrimExpr>& factors,
+                           const Array<IterVar>& new_axis) {
   auto& stacktop = self->decomp_stack.back();
   CHECK_EQ(factors.size(), stacktop.left_ivars.size());
   auto& leaf_vars = self->leaf_iter_vars;
@@ -551,7 +542,7 @@ void decompStackPushHelper(StageNode* self, const Array<PrimExpr>& factors, cons
     self->leaf_iter_vars.push_back(right);
     self->all_iter_vars.push_back(left);
     self->all_iter_vars.push_back(right);
-    auto split = Split(v, right, left, PrimExpr(), indexdiv(stacktop.factors[i] ,factors[i]));
+    auto split = Split(v, right, left, PrimExpr(), indexdiv(stacktop.factors[i], factors[i]));
     self->relations.push_back(split);
     entry.left_ivars.push_back(left);
     entry.right_ivars.push_back(right);
@@ -559,7 +550,8 @@ void decompStackPushHelper(StageNode* self, const Array<PrimExpr>& factors, cons
   }
   self->decomp_stack.push_back(entry);
   auto& stackbottom = self->decomp_stack.front();
-  CHECK(stackbottom.split_relations.size() == new_axis.size()); //TODO: this is true if no reduce exists in original op
+  CHECK(stackbottom.split_relations.size() ==
+        new_axis.size());  // TODO: this is true if no reduce exists in original op
   for (size_t i = 0; i < new_axis.size(); i++) {
     auto& old_relation = stackbottom.split_relations[i];
     auto new_relation = Split(new_axis[i], old_relation->outer, old_relation->inner,
@@ -574,7 +566,6 @@ void decompStackPushHelper(StageNode* self, const Array<PrimExpr>& factors, cons
     stackbottom.split_relations.erase(stackbottom.split_relations.begin() + i);
     stackbottom.split_relations.insert(stackbottom.split_relations.begin() + i, new_relation);
   }
-
 }
 
 Stage& Stage::decompose(Array<PrimExpr> factors, Array<IterVar>& ret_ivars) {
@@ -583,8 +574,7 @@ Stage& Stage::decompose(Array<PrimExpr> factors, Array<IterVar>& ret_ivars) {
   Operation self_op = self->op;
   arith::Analyzer ana;
   if (auto* origin_op = self_op.as<ComputeOpNode>()) {
-    CHECK(origin_op->attrs.count("TslOp") != 0)
-        << "Not a TslOp";  
+    CHECK(origin_op->attrs.count("TslOp") != 0) << "Not a TslOp";
 
     auto& stacktop = self->decomp_stack.back();
     Array<PrimExpr> origin_shape = origin_op->output_shape(0);
@@ -599,7 +589,7 @@ Stage& Stage::decompose(Array<PrimExpr> factors, Array<IterVar>& ret_ivars) {
       CHECK(ana.CanProve(indexmod(stacktop.factors[i], factors[i]) == 0))
           << "Non-even decomposition not allowed";
       new_out_eshape.push_back(ana.Simplify(factors[i]));
-      new_out_ushape.push_back(ana.Simplify(indexdiv(origin_shape[i] , factors[i])));
+      new_out_ushape.push_back(ana.Simplify(indexdiv(origin_shape[i], factors[i])));
     }
     // stage 1: generate new traget decomposing op
     Array<IterVar> new_axis;
@@ -617,14 +607,16 @@ Stage& Stage::decompose(Array<PrimExpr> factors, Array<IterVar>& ret_ivars) {
     decompStackPushHelper(self, factors, new_axis);
     ret_ivars = self->decomp_stack.back().right_ivars;
 
-    // stage 3: update stage's op and update reader operations 
+    // stage 3: update stage's op and update reader operations
     self->op = new_op;
     std::cout << "NEW:" << new_op.output(0) << std::endl;
-   
-    auto readgraph = CreateReadGraph(self->parent_sched->outputs); //no new op is added, so readgraph of
-                              //original schedule is enough
+
+    auto readgraph =
+        CreateReadGraph(self->parent_sched->outputs);  // no new op is added, so readgraph of
+                                                       // original schedule is enough
     auto feedgraph = CreateFeedGraph(readgraph);
-    te::Tensor origin_tensor = self->origin_op.output(0); //only meant to use original op's tensor output to find readers! 
+    te::Tensor origin_tensor = self->origin_op.output(
+        0);  // only meant to use original op's tensor output to find readers!
     te::Tensor new_tensor = new_op.output(0);
     if (feedgraph.find(origin_tensor) != feedgraph.end()) {
       auto readers = feedgraph.at(origin_tensor);
@@ -641,10 +633,12 @@ Stage& Stage::decompose(Array<PrimExpr> factors, Array<IterVar>& ret_ivars) {
         rvmap[repl_op.output(0)] = s->op.output(0);
         s->op = repl_op;
       }
-      ReplaceDataFlow(self->parent_sched->stages, &vmap, &rvmap); // use this TVM infra to make all possible updates in dataflow graph(stage graph)
+      ReplaceDataFlow(self->parent_sched->stages, &vmap,
+                      &rvmap);  // use this TVM infra to make all possible updates in dataflow
+                                // graph(stage graph)
     }
 
-    // stage 3e: some debug info. 
+    // stage 3e: some debug info.
     readgraph = CreateReliableReadGraph(self->parent_sched);
     std::cout << "////////////////////////////" << std::endl;
     printreadgraph(readgraph);
@@ -658,15 +652,9 @@ Stage& Stage::decompose(Array<PrimExpr> factors, Array<IterVar>& ret_ivars) {
       std::cout << v.output(0) << std::endl;
     }
 
-    //stage 4: backward elemshape inference
-    // CURRENT VERSION HAS NO SUPPORT FOR REDUCE. TODO: implement proposed infinite/finite reduce and investigate x+rx
-    
-
-
-
-
-
-
+    // stage 4: backward elemshape inference
+    // CURRENT VERSION HAS NO SUPPORT FOR REDUCE. TODO: implement proposed infinite/finite reduce
+    // and investigate x+rx
 
   } else {
     CHECK(0) << "Can only decompose ComputeOp";
@@ -677,7 +665,13 @@ Stage& Stage::decompose(Array<PrimExpr> factors, Array<IterVar>& ret_ivars) {
 
 #endif
 
-Stage CopyStage(const Stage& s) {
+#if TSL_DBG_V1
+Stage& Stage::decompose(Array<PrimExpr> factors, Array<IterVar>& ret_ivars) {
+
+}
+#endif
+
+    Stage CopyStage(const Stage& s) {
   ObjectPtr<StageNode> n = make_object<StageNode>(*s.operator->());
   return Stage(n);
 }
@@ -902,6 +896,7 @@ Schedule::Schedule(Array<Operation> ops) {
   }
   for (Operation op : post_order) {
     Stage stage;
+    #if TSL_DBG_V0
     if (op->attrs.count("TslOp") != 0) {
       stage = Stage(op, this->operator->());  // xjx: tsl modification, let stagenode hold a
                                               // scheduleNode* pointer, by this we can call
@@ -910,6 +905,9 @@ Schedule::Schedule(Array<Operation> ops) {
     } else {
       stage = Stage(op);
     }
+    #else 
+    stage = Stage(op);
+    #endif
     stage->is_output = output_set.count(op) != 0;
     n->stages.push_back(stage);
     n->stage_map.Set(op, stage);
