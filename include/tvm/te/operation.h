@@ -227,7 +227,6 @@ class PlaceholderOp : public Operation {
   TVM_DLL PlaceholderOp(std::string name, Array<PrimExpr> shape, DataType dtype,
                         Map<String, ObjectRef> attrs);
   TVM_DEFINE_OBJECT_REF_METHODS(PlaceholderOp, Operation, PlaceholderOpNode);
-  
 };
 
 /*!
@@ -278,7 +277,7 @@ class TVM_DLL ComputeOpNode : public BaseComputeOpNode {
   Array<Tensor> InputTensors() const final;
   Operation ReplaceInputs(const Operation& self,
                           const std::unordered_map<Tensor, Tensor>& rmap) const final;
-  //xjx added: used only for tsl
+  // xjx added: used only for tsl
   Operation ReplaceIterVars(const Operation& self,
                             const std::unordered_map<IterVar, IterVar>& rmap) const;
   void PropBoundToInputs(const Operation& self, arith::Analyzer* analyzer,
@@ -314,8 +313,9 @@ class ComputeOp : public Operation {
   TVM_DLL ComputeOp(std::string name, std::string tag, Map<String, ObjectRef> attrs,
                     Array<IterVar> axis, Array<PrimExpr> body);
   TVM_DLL ComputeOp(std::string name, std::string tag, Map<String, ObjectRef> attrs,
-                    Array<IterVar> axis,Array<PrimExpr> shape, Array<PrimExpr> out_ushape, Array<PrimExpr> out_eshape,
-                    Array<PrimExpr> in_ushape, Array<PrimExpr> in_eshape, Array<TslExpr> body);
+                    Array<IterVar> axis, Array<PrimExpr> shape, Array<PrimExpr> out_ushape,
+                    Array<PrimExpr> out_eshape, Array<PrimExpr> in_ushape,
+                    Array<PrimExpr> in_eshape, Array<TslExpr> body);
   TVM_DEFINE_OBJECT_REF_METHODS(ComputeOp, Operation, ComputeOpNode);
 };
 
@@ -628,6 +628,8 @@ TVM_DLL IterVar thread_axis(Range dom, std::string tag);
  */
 TVM_DLL IterVar reduce_axis(Range dom, std::string name = "rv");
 
+TVM_DLL IterVar tsl_reduce_axis(Range dom, PrimExpr eshape, std::string name = "rv");
+
 /*! \brief The compute function to specify the input source of a Tensor */
 using FCompute = std::function<PrimExpr(const Array<Var>& i)>;
 
@@ -645,7 +647,7 @@ using FBatchCompute = std::function<Array<PrimExpr>(const Array<Var>& i)>;
 TVM_DLL Tensor placeholder(Array<PrimExpr> shape, DataType dtype = DataType::Float(32),
                            std::string name = "placeholder");
 TVM_DLL Tensor Tslplaceholder(Array<PrimExpr> shape, DataType dtype = DataType::Float(32),
-                           std::string name = "tslplaceholder");
+                              std::string name = "tslplaceholder");
 /*!
  * \brief Construct a new tensor by computing over shape,
  *  using the computation rule: result_tensor[axis] = fcompute(axis)
@@ -660,7 +662,7 @@ TVM_DLL Tensor compute(Array<PrimExpr> shape, FCompute fcompute, std::string nam
 
 TVM_DLL Tensor compute(Array<PrimExpr> shape, TSLCompute fcompute, std::string name = "tensor",
                        std::string tag = "", Map<String, ObjectRef> attrs = {});
-    /*!
+/*!
  * \brief Construct a new tensor by computing over shape,
  *  using the computation rule: result_tensor[axis] = fcompute(axis)
  * \param shape Shape of the tensor.
@@ -670,8 +672,8 @@ TVM_DLL Tensor compute(Array<PrimExpr> shape, TSLCompute fcompute, std::string n
  * \param attrs Optional additional attributes of the compute.
  */
 TVM_DLL Array<Tensor> compute(Array<PrimExpr> shape, FBatchCompute fcompute,
-                                  std::string name = "tensor", std::string tag = "",
-                                  Map<String, ObjectRef> attrs = {});
+                              std::string name = "tensor", std::string tag = "",
+                              Map<String, ObjectRef> attrs = {});
 
 /*!
  * \brief Construct new tensors by scan.
@@ -717,25 +719,26 @@ inline Tensor compute(Array<PrimExpr> shape, std::function<PrimExpr(Var, Var, Va
 }
 
 // xjx added
-inline Tensor compute(Array<PrimExpr> shape, std::function<TslExpr(Var)> f, std::string name = "tensor", std::string tag = "",
+inline Tensor compute(Array<PrimExpr> shape, std::function<TslExpr(Var)> f,
+                      std::string name = "tensor", std::string tag = "",
                       Map<String, ObjectRef> attrs = {}) {
   TSLCompute fc = [f](const Array<Var>& i) { return f(i[0]); };
   return compute(shape, fc, name, tag, attrs);
 }
 
 // xjx added
-inline Tensor compute(Array<PrimExpr> shape, std::function<TslExpr(Var,Var)> f,
+inline Tensor compute(Array<PrimExpr> shape, std::function<TslExpr(Var, Var)> f,
                       std::string name = "tensor", std::string tag = "",
                       Map<String, ObjectRef> attrs = {}) {
-  TSLCompute fc = [f](const Array<Var>& i) { return f(i[0],i[1]); };
+  TSLCompute fc = [f](const Array<Var>& i) { return f(i[0], i[1]); };
   return compute(shape, fc, name, tag, attrs);
 }
 
 // xjx added
-inline Tensor compute(Array<PrimExpr> shape, std::function<TslExpr(Var,Var,Var)> f,
+inline Tensor compute(Array<PrimExpr> shape, std::function<TslExpr(Var, Var, Var)> f,
                       std::string name = "tensor", std::string tag = "",
                       Map<String, ObjectRef> attrs = {}) {
-  TSLCompute fc = [f](const Array<Var>& i) { return f(i[0],i[1],i[2]); };
+  TSLCompute fc = [f](const Array<Var>& i) { return f(i[0], i[1], i[2]); };
   return compute(shape, fc, name, tag, attrs);
 }
 
@@ -746,7 +749,6 @@ inline Tensor compute(Array<PrimExpr> shape, std::function<TslExpr(Var, Var, Var
   TSLCompute fc = [f](const Array<Var>& i) { return f(i[0], i[1], i[2], i[3]); };
   return compute(shape, fc, name, tag, attrs);
 }
-
 
 // inline function.
 inline const OperationNode* Operation::operator->() const {

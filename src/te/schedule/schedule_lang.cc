@@ -90,23 +90,6 @@ void SplitHelper(StageNode* self, IterVar parent, PrimExpr factor, PrimExpr npar
   leaf_vars.insert(leaf_vars.begin() + pos, outer);
 }
 
-Stage::Stage(Operation op) {
-  auto n = make_object<StageNode>();
-  n->op = op;
-  n->origin_op = op;
-  n->all_iter_vars = op->root_iter_vars();
-  // remove opaque var from leaf.
-  Array<IterVar> clean;
-  for (IterVar iv : n->all_iter_vars) {
-    if (iv->iter_type != kOpaque) clean.push_back(iv);
-  }
-  if (clean.size() == n->all_iter_vars.size()) {
-    n->leaf_iter_vars = n->all_iter_vars;
-  } else {
-    n->leaf_iter_vars = clean;
-  }
-  data_ = std::move(n);
-}
 
 #if TSL_DBG_V0
 Stage::Stage(Operation op, ScheduleNode* schedptr) {
@@ -145,39 +128,31 @@ Stage::Stage(Operation op, ScheduleNode* schedptr) {
 #endif
 
 #if TSL_DBG_V1
-Stage::Stage(Operation op, ScheduleNode* schedptr) {
-  // TODO: NO IDEA WETHER THIS WOULD WORK FOR SCANOP!!!!
+
+Stage::Stage(Operation op) {
   auto n = make_object<StageNode>();
   n->op = op;
   n->origin_op = op;
-  n->parent_sched = schedptr;
-  auto root_iter_vars = op->root_iter_vars();  // axis first, then reduce axis
-  auto entry = StageNode::DecompEntry();
-  entry.factors = op->output_elemshape(0);
-  entry.level = 0;
-  for (auto v : root_iter_vars) {
-    n->all_iter_vars.push_back(v);
-    if (v->iter_type != kOpaque) {
-      std::ostringstream os;
-      os << "." << n->decomp_stack.size();
-      auto prefix = os.str();
-      IterVar left = IterVar(Range(), v->var.copy_with_suffix(prefix + "L"), v->iter_type);
-      IterVar right = IterVar(Range(), v->var.copy_with_suffix(prefix + "R"), v->iter_type);
-      n->all_iter_vars.push_back(left);
-      n->all_iter_vars.push_back(right);
-      n->leaf_iter_vars.push_back(left);
-      n->leaf_iter_vars.push_back(right);
-      auto split = Split(v, right, left, PrimExpr(), 1);
-      n->relations.push_back(split);
-
-      entry.left_ivars.push_back(left);
-      entry.right_ivars.push_back(right);
-      entry.split_relations.push_back(split);
+  n->all_iter_vars = op->root_iter_vars();
+  // remove opaque var from leaf.
+  Array<IterVar> clean;
+  for (IterVar iv : n->all_iter_vars) {
+    if (iv->iter_type != kOpaque) clean.push_back(iv);
+  }
+  if (clean.size() == n->all_iter_vars.size()) {
+    n->leaf_iter_vars = n->all_iter_vars;
+  } else {
+    n->leaf_iter_vars = clean;
+  }
+  if (op->attrs.count("TslOp") != 0) {
+    CHECK(clean.size() == n->all_iter_vars.size()) << "Tsl assumes the stmt true";
+    for (auto iv : n->leaf_iter_vars) {
+      StageNode::DecompEntry::Create()
     }
   }
-  n->decomp_stack.push_back(entry);
   data_ = std::move(n);
 }
+
 #endif
 
 bool Stage::is_scheduled() const {

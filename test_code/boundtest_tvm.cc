@@ -32,7 +32,7 @@ int main() {
   sch[C].split(inner, 4, &outer, &inner);
 
   sch[B].compute_at(sch[C], outer);
-  auto args = Array<te::Tensor>({A, B, C});
+  auto args = Array<te::Tensor>({A, C});
   std::unordered_map<te::Tensor, te::Buffer> binds;
   auto target = Target("llvm");
   /*auto bounds = te::InferBound(sch);

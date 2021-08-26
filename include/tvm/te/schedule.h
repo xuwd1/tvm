@@ -626,8 +626,11 @@ class SpecializedCondition : public ObjectRef {
 class StageNode : public Object {
  public:
   // xjx add
+  #if TSL_DBG_V0 
   struct DecompEntry;
   struct ReadShapeEntry;
+  #endif
+
   ScheduleNode* parent_sched;
 
   /*!
@@ -682,17 +685,16 @@ class StageNode : public Object {
   int num_child_stages{0};
 
   bool is_tsl_stage{false};
-  /*!
-   * \brief The decomposition stack
-   *  The decomp stack is used to track the hierarchy of decomposition
-   */
-  #if TSL_DBG_V0
+/*!
+ * \brief The decomposition stack
+ *  The decomp stack is used to track the hierarchy of decomposition
+ */
+#if TSL_DBG_V0
   std::vector<DecompEntry> decomp_stack;  // TODO: TVM object-rize this
-  
-  //std::unordered_map<StageNode*, ReadShapeEntry>;
+
+  // std::unordered_map<StageNode*, ReadShapeEntry>;
   std::unordered_map<Stage, ReadShapeEntry, ObjectPtrHash, ObjectPtrEqual> read_shape_map;
 
-  
   struct DecompEntry {
     Array<PrimExpr> factors;
     Array<IterVar> left_ivars;
@@ -715,7 +717,6 @@ class StageNode : public Object {
         : read_ushape(read_ushape), read_eshape(read_eshape), strides(strides), defined(true) {}
   };
 
-  
   void SetOrUpdateReadShapeMap(Stage newstage, Stage oldstage, ReadShapeEntry entry) {
     // 1. set readshapeentry
     if (entry.defined) {
@@ -729,9 +730,28 @@ class StageNode : public Object {
       }
     }
   }
+#endif
+#if TSL_DBG_V1
+  struct DecompEntry {
+    PrimExpr factor;
+    IterVar pathivar;
+    Array<IterVar> leaf_vars;
+    Array<IterVar> all_vars;
+    Array<IterVarRelation> relations;
+    static DecompEntry Create(PrimExpr factor, IterVar pathivar) { 
+      DecompEntry ret;
+      ret.factor = factor;
+      ret.pathivar = pathivar;
+      ret.leaf_vars.push_back(pathivar);
+      ret.all_vars.push_back(pathivar);
+      return ret;
+    }
+  };
+  using DecompStack = std::vector<DecompEntry>;
+  using DecomposeContxt = std::vector<DecompStack>;
 
-
-  #endif
+  DecomposeContxt decompose_ctx;
+#endif
 
   void VisitAttrs(AttrVisitor* v) {
     v->Visit("op", &op);
@@ -746,11 +766,10 @@ class StageNode : public Object {
     v->Visit("attach_stage", &attach_stage);
     v->Visit("scope", &scope);
     v->Visit("is_output", &is_output);
-    v->Visit("double_buffer",&double_buffer);
+    v->Visit("double_buffer", &double_buffer);
     v->Visit("group", &group);
     v->Visit("num_child_stages", &num_child_stages);
   }
-
 
   static constexpr const char* _type_key = "Stage";
   TVM_DECLARE_FINAL_OBJECT_INFO(StageNode, Object);
