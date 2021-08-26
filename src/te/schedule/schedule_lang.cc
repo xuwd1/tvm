@@ -27,7 +27,7 @@
 #include <tvm/tsl/tsl_debug.h>
 #include <stack>
 #include <unordered_set>
-
+#include <tvm/tsl/te/ivar_visitor.h>
 #include "graph.h"
 
 
@@ -144,10 +144,17 @@ Stage::Stage(Operation op) {
   } else {
     n->leaf_iter_vars = clean;
   }
+  std::cout<<op<<std::endl;
   if (op->attrs.count("TslOp") != 0) {
-    CHECK(clean.size() == n->all_iter_vars.size()) << "Tsl assumes the stmt true";
-    for (auto iv : n->leaf_iter_vars) {
-      StageNode::DecompEntry::Create()
+    CHECK(clean.size() == n->all_iter_vars.size()) << "Tsl assumes the assertion true";
+    const auto nodeptr = op.as<ComputeOpNode>();
+    if (nodeptr!=nullptr) { //if op is computeop
+      std::unordered_map<IterVar, PrimExpr> shape_map;
+      ExtractRootPathIvarShape(GetRef<ComputeOp>(nodeptr), n->leaf_iter_vars, &shape_map);
+      for (auto& v:shape_map) {
+        std::cout<<v.first<<":" <<v.second<< std::endl;
+      }
+     
     }
   }
   data_ = std::move(n);
@@ -485,9 +492,7 @@ void printreadgraph(te::ReadGraph rg) {
 
 /////////////////DEBUG/////////////
 
-#if TSL_DBG_V1
-Stage& Stage::decompose(Array<PrimExpr> factors, Array<IterVar>& ret_ivars) { arith::Analyzer ana; }
-#endif
+
 
 #if TSL_DBG_V0
 
@@ -642,7 +647,7 @@ Stage& Stage::decompose(Array<PrimExpr> factors, Array<IterVar>& ret_ivars) {
 
 #if TSL_DBG_V1
 Stage& Stage::decompose(Array<PrimExpr> factors, Array<IterVar>& ret_ivars) {
-
+  return *this;
 }
 #endif
 

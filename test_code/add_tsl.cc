@@ -11,7 +11,7 @@
 #include <tvm/tir/expr.h>
 #include <tvm/tir/stmt_functor.h>
 #include <tvm/tir/var.h>
-
+#include <tvm/tsl/tsl_debug.h>
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -29,6 +29,7 @@ void printTensorAttrs(const te::Tensor& A) {
   cout << A->read_ushape << endl;
 }
 
+#if TSL_DBG_V0
 void printDecompDBGInfo(te::StageNode* stage) {
   cout << "DECOMP STACK for " << stage << endl;
   auto& stack = stage->decomp_stack;
@@ -41,7 +42,7 @@ void printDecompDBGInfo(te::StageNode* stage) {
   cout << "LEAF ITERVARS:" << endl;
   cout << stage->leaf_iter_vars << endl;
 }
-
+#endif
 int main() {
   const int M = 512;
   const int N = 256;
@@ -59,6 +60,7 @@ int main() {
       }),
       "tsladd(A,B)");
 
+  auto sch=te::create_schedule({C->op});
   // auto C_op = C->op;
   // auto C_computeNode = *C_op.as<te::ComputeOpNode>();
   // cout << C_computeNode.in_eshape << endl;
@@ -73,6 +75,7 @@ int main() {
   // cout << C << endl;
   // cout << C->op->InputTensors() << endl;
 
+  /*
   te::Tensor D = te::compute(
       {M, N}, std::function<te::TslExpr(tir::Var, tir::Var)>([=](tir::Var i, tir::Var j) {
         return tir::TslAdd(C.TslPLoad({i, j}), X.TslPLoad({i, j}));
@@ -114,6 +117,6 @@ int main() {
   cout << ret2outer << ":" << map[ret2outer] << endl;
   cout << ret2inner << ":" << map[ret2inner] << endl;
 
-
+  */
   // printDecompDBGInfo(sch[D].operator->());
 }
