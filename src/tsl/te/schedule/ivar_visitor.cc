@@ -25,22 +25,26 @@ void ExtractRootPathIvarShape(const ComputeOp& op, const Array<IterVar>& request
   auto fvisit = [&](const ObjectRef& n) {
     if (auto* pload = n.as<TslProducerLoadNode>()) {
       
-      Array<PrimExpr> indices = pload->indices; //TODO:indices should be modified to support compound indexing, which is supposed to be used for supporting CONV
+      Array<Array<PrimExpr>> c_indices = pload->c_indices;
       Tensor t = Downcast<Tensor>(pload->producer);
       CHECK(t->op.defined());
       const Operation& producer_op = t->op;
       Array<PrimExpr> shape = producer_op->output_shape(t->value_index);
-      CHECK(indices.size() == t.ndim());
-      for (size_t i = 0; i < indices.size(); i++) { 
-        const auto index_var=indices[i].as<VarNode>(); //TODO:compound indexing also needs this modified
-        CHECK(index_var!=nullptr);
-        size_t pos = FindVar(requested, GetRef<Var>(index_var));
-        if (pos  < requested.size()) {
-          if (map.count(requested[pos])!=0) { //indexer occurred more than once
-            auto x = map[requested[pos]];
-            CHECK((x==shape[i]).as<tir::IntImmNode>()->value); //TODO:in compound indexing, only gather pure indexing if a indexer occurred more than once
-          } else {
-            map[requested[pos]] = shape[i];
+      CHECK(c_indices.size() == t.ndim());
+      for (size_t i = 0; i < c_indices.size(); i++) {
+        Array<PrimExpr> c_index = c_indices[i];
+        const VarNode* index_var;
+        if (c_index.size()==1) {
+          index_var=c_index[0].as<VarNode>();
+          CHECK(index_var != nullptr);
+          size_t pos = FindVar(requested, GetRef<Var>(index_var));
+          if (pos < requested.size()) {
+            if (map.count(requested[pos]) != 0) {  // indexer occurred more than once
+              auto x = map[requested[pos]];
+              CHECK((x == shape[i]).as<tir::IntImmNode>()->value);  
+            } else {
+              map[requested[pos]] = shape[i];
+            }
           }
         }
       }

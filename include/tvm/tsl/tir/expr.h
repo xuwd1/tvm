@@ -305,6 +305,8 @@ class TslProducerLoadNode : public TslExprNode {
   DataProducer producer;
   /*! \brief The location arguments. */
   Array<PrimExpr> indices;
+  /*! \brief The compound indexer. this is only meaningful in TSL before scheduleOps  */
+  Array<Array<PrimExpr>> c_indices;
 
   void VisitAttrs(AttrVisitor* v) {
     v->Visit("dtype", &(this->dtype));
@@ -334,6 +336,7 @@ class TslProducerLoadNode : public TslExprNode {
 class TslProducerLoad : public TslExpr {
  public:
   TVM_DLL explicit TslProducerLoad(DataProducer producer, Array<PrimExpr> indices);
+  TVM_DLL explicit TslProducerLoad(DataProducer producer, Array<Array<PrimExpr>> c_indices);
   Array<Array<PrimExpr>> PropbackElemshape(Array<PrimExpr> source) final;
   TVM_DEFINE_OBJECT_REF_METHODS(TslProducerLoad, TslExpr, TslProducerLoadNode);
 };

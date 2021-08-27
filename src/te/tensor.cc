@@ -44,12 +44,33 @@ PrimExpr Tensor::operator()(Array<Var> indices) const {
   return operator()(arr);
 }
 
+TslExpr Tensor::operator()(Array<Array<PrimExpr>> c_indices) const {
+  CHECK((*this)->op->attrs.count("TslOp"))<<"compound indexing only available to TslOp";
+  if (ndim()!=0) {
+    CHECK_EQ(ndim(), c_indices.size()) << "Tensor dimension mismatch in compound indexer"
+                                     << "ndim = " << ndim() << ", c_indices.size=" << c_indices.size();
+  }
+  return TslProducerLoad((*this),c_indices);
+}
+
+TslExpr Tensor::operator()(Array<Array<Var>> c_indices) const {
+  Array<Array<PrimExpr>> expr_c_indices;
+  for (auto &arr:c_indices) {
+    expr_c_indices.push_back(Array<PrimExpr>(arr.begin(),arr.end()));
+  }
+  return operator()(expr_c_indices);
+}
+
 TslExpr Tensor::TslPLoad(Array<PrimExpr> indices) const { 
   if (ndim() != 0) {
     CHECK_EQ(ndim(), indices.size()) << "Tensor dimension mismatch in read"
                                      << "ndim = " << ndim() << ", indices.size=" << indices.size();
   }
-  return TslProducerLoad((*this), indices);
+  Array<Array<PrimExpr>> expr_c_indices;
+  for (auto &v:indices) {
+    expr_c_indices.push_back(Array<PrimExpr>({v}));
+  }
+  return TslProducerLoad((*this), expr_c_indices);
 }
 
 PrimExpr Tensor::operator()(Array<PrimExpr> indices) const {

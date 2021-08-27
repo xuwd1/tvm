@@ -735,15 +735,18 @@ class StageNode : public Object {
   struct DecompEntry {
     PrimExpr factor;
     IterVar pathivar;
+    //all reachable leaf vars from pathivar
     Array<IterVar> leaf_vars;
+    //all reachable vars from pathivar
     Array<IterVar> all_vars;
+    //all relations associated with vars derived from pathivar
     Array<IterVarRelation> relations;
     static DecompEntry Create(PrimExpr factor, IterVar pathivar) { 
       DecompEntry ret;
       ret.factor = factor;
       ret.pathivar = pathivar;
       ret.leaf_vars.push_back(pathivar);
-      ret.all_vars.push_back(pathivar);
+      ret.all_vars.push_back(pathivar); 
       return ret;
     }
   };

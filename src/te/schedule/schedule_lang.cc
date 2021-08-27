@@ -151,8 +151,13 @@ Stage::Stage(Operation op) {
     if (nodeptr!=nullptr) { //if op is computeop
       std::unordered_map<IterVar, PrimExpr> shape_map;
       ExtractRootPathIvarShape(GetRef<ComputeOp>(nodeptr), n->leaf_iter_vars, &shape_map);
-      for (auto& v:shape_map) {
-        std::cout<<v.first<<":" <<v.second<< std::endl;
+      for (auto &kv:shape_map) {
+        std::cout<<kv.first<<":"<<kv.second<<std::endl;
+      }
+      for (auto &v: n->leaf_iter_vars) {
+        auto entry=StageNode::DecompEntry::Create(shape_map[v],v);
+        auto stack=StageNode::DecompStack({entry});
+        (*this)->decompose_ctx.push_back(stack);
       }
      
     }

@@ -149,11 +149,20 @@ class Tensor : public DataProducer {
    * \return the result expression representing tensor read.
    */
   TVM_DLL PrimExpr operator()(Array<Var> indices) const;
+
+  //xjx add
+  //legacy interface, now used to act as shortcut to creating pure compound indices!
+  TVM_DLL TslExpr TslPLoad(Array<PrimExpr> indices) const;
+  
+  TVM_DLL TslExpr operator()(Array<Array<PrimExpr>> c_indices) const;
+  
+  TVM_DLL TslExpr operator()(Array<Array<Var>> c_indices) const;
+
   /*!
    * \brief data structure to represent a slice that fixes first k coordinates.
    *  This is used to enable syntax sugar of Tensor[x][y][z] to get the element.
    */
-  TVM_DLL TslExpr TslPLoad(Array<PrimExpr> indices) const;
+
 
   class Slice {
    public:

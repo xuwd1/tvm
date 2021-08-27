@@ -248,6 +248,15 @@ TslProducerLoad::TslProducerLoad(DataProducer producer, Array<PrimExpr> indices)
   data_ = std::move(node);
 }
 
+tvm::tir::TslProducerLoad::TslProducerLoad(DataProducer producer,
+                                           Array<Array<PrimExpr>> c_indices) {
+  auto node=make_object<TslProducerLoadNode>();
+  node->dtype=producer->GetDataType();
+  node->producer = std::move(producer);
+  node->c_indices=std::move(c_indices);
+  data_=std::move(node);
+}
+
 Array<Array<PrimExpr>> TslProducerLoad::PropbackElemshape(Array<PrimExpr> source) {
   return Array<Array<PrimExpr>>();
 }
