@@ -17,6 +17,7 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <tvm/tsl/tsl_debug_lang.h>
 
 using namespace tvm;
 using namespace std;
@@ -61,6 +62,11 @@ int main() {
       "tsladd(A,B)");
 
   auto sch=te::create_schedule({C->op});
+  te::TslPrintDecomposeCtx(sch[C].as<te::StageNode>());
+  Array<tir::IterVar> ret;
+  sch[C].decompose({64,64},ret);
+  te::TslPrintDecomposeCtx(sch[C].as<te::StageNode>());
+
   // auto C_op = C->op;
   // auto C_computeNode = *C_op.as<te::ComputeOpNode>();
   // cout << C_computeNode.in_eshape << endl;

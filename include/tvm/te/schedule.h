@@ -741,16 +741,15 @@ class StageNode : public Object {
     Array<IterVar> all_vars;
     //all relations associated with vars derived from pathivar
     Array<IterVarRelation> relations;
-    static DecompEntry Create(PrimExpr factor, IterVar pathivar) { 
-      DecompEntry ret;
-      ret.factor = factor;
-      ret.pathivar = pathivar;
-      ret.leaf_vars.push_back(pathivar);
-      ret.all_vars.push_back(pathivar); 
-      return ret;
-    }
+    static DecompEntry Create(PrimExpr factor, IterVar pathivar);
   };
-  using DecompStack = std::vector<DecompEntry>;
+  struct DecompStack {
+    IterVarType iter_type;
+    std::vector<DecompEntry> entries;
+    static DecompStack Create(IterVarType iter_type);
+    size_t size() const;
+    DecompEntry& operator[](size_t index);
+  };
   using DecomposeContxt = std::vector<DecompStack>;
 
   DecomposeContxt decompose_ctx;

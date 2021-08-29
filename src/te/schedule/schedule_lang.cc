@@ -25,6 +25,7 @@
 #include <tvm/te/operation.h>
 #include <tvm/te/schedule.h>
 #include <tvm/tsl/tsl_debug.h>
+
 #include <stack>
 #include <unordered_set>
 #include <tvm/tsl/te/ivar_visitor.h>
@@ -127,7 +128,7 @@ Stage::Stage(Operation op, ScheduleNode* schedptr) {
 }
 #endif
 
-#if TSL_DBG_V1
+
 
 Stage::Stage(Operation op) {
   auto n = make_object<StageNode>();
@@ -144,7 +145,7 @@ Stage::Stage(Operation op) {
   } else {
     n->leaf_iter_vars = clean;
   }
-  std::cout<<op<<std::endl;
+#if TSL_DBG_V1
   if (op->attrs.count("TslOp") != 0) {
     CHECK(clean.size() == n->all_iter_vars.size()) << "Tsl assumes the assertion true";
     const auto nodeptr = op.as<ComputeOpNode>();
@@ -156,15 +157,44 @@ Stage::Stage(Operation op) {
       }
       for (auto &v: n->leaf_iter_vars) {
         auto entry=StageNode::DecompEntry::Create(shape_map[v],v);
-        auto stack=StageNode::DecompStack({entry});
-        (*this)->decompose_ctx.push_back(stack);
+        auto stack=StageNode::DecompStack::Create(v->iter_type);
+        stack.entries.push_back(entry);
+        n->decompose_ctx.push_back(stack);
       }
      
     }
   }
+#endif
   data_ = std::move(n);
 }
 
+
+
+#if TSL_DBG_V1
+Stage& Stage::decompose(Array<PrimExpr> factors, Array<IterVar>& ret_ivars) {
+  StageNode* self=operator->();
+  //search for non_reduce ivar decompStack start index
+  size_t ind=0;
+  for (;ind<self->decompose_ctx.size();ind++) {
+    if (self->decompose_ctx[ind].iter_type==IterVarType::kDataPar) {
+      break;
+    }
+  }
+  Array<IterVar> ret;
+  for (auto factor:factors) {
+    auto& stack = self->decompose_ctx[ind];
+    CHECK(stack.iter_type == IterVarType::kDataPar)<<"decompose should only be used on non-reduce axis";
+    const auto root_path_ivar=stack[0].pathivar;
+    std::stringstream ss;
+    std::string prefix=".L";
+    ss<<stack.size();
+    IterVar path_ivar=IterVar(Range(),root_path_ivar->var.copy_with_suffix(prefix+ss.str()),stack.iter_type);
+    auto entry=StageNode::DecompEntry::Create(factor,path_ivar);
+    stack.entries.push_back(entry);
+    ind++;
+  }
+  return (*this);
+} 
 #endif
 
 bool Stage::is_scheduled() const {
@@ -650,13 +680,9 @@ Stage& Stage::decompose(Array<PrimExpr> factors, Array<IterVar>& ret_ivars) {
 
 #endif
 
-#if TSL_DBG_V1
-Stage& Stage::decompose(Array<PrimExpr> factors, Array<IterVar>& ret_ivars) {
-  return *this;
-}
-#endif
 
-    Stage CopyStage(const Stage& s) {
+
+Stage CopyStage(const Stage& s) {
   ObjectPtr<StageNode> n = make_object<StageNode>(*s.operator->());
   return Stage(n);
 }
