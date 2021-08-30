@@ -31,6 +31,10 @@ auto StageNode::DecompStack::operator[](size_t index) ->StageNode::DecompEntry& 
   return this->entries[index];
 }
 
+auto StageNode::DecompStack::operator[](size_t index) const ->const DecompEntry& {
+  return this->entries[index];
+}
+
 
 }
 }

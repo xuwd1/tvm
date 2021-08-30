@@ -749,6 +749,7 @@ class StageNode : public Object {
     static DecompStack Create(IterVarType iter_type);
     size_t size() const;
     DecompEntry& operator[](size_t index);
+    const DecompEntry& operator[](size_t index) const;
   };
   using DecomposeContxt = std::vector<DecompStack>;
 
