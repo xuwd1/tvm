@@ -751,7 +751,16 @@ class StageNode : public Object {
     DecompEntry& operator[](size_t index);
     const DecompEntry& operator[](size_t index) const;
   };
-  using DecomposeContxt = std::vector<DecompStack>;
+  class DecomposeContxt : public std::vector<DecompStack>{
+    //std::vector<DecompStack> stacks;
+    //size_t size() const {return stacks.size();}
+    //void push_back(const DecompStack& stack) {this->stacks.push_back(stack);}
+    //DecompStack& operator[](size_t index) {return this->stacks[index];}
+    //const DecompStack& operator[](size_t index) const {return this->stacks[index];}
+    DecompStack& find(const PrimExpr& index_var);
+  };
+
+  //using DecomposeContxt = std::vector<DecompStack>;
 
   DecomposeContxt decompose_ctx;
 #endif

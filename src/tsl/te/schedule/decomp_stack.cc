@@ -27,12 +27,22 @@ auto StageNode::DecompStack::size() const ->size_t {
   return this->entries.size();
 }
 
-auto StageNode::DecompStack::operator[](size_t index) ->StageNode::DecompEntry& {
+auto StageNode::DecompStack::operator[](size_t index) ->DecompEntry& {
   return this->entries[index];
 }
 
 auto StageNode::DecompStack::operator[](size_t index) const ->const DecompEntry& {
   return this->entries[index];
+}
+
+auto StageNode::DecomposeContxt::find(const PrimExpr& index_var) -> DecompStack& {
+  for (auto &stack:(*this)) {
+    CHECK(stack.size());
+    if (stack[0].pathivar->var.get()==index_var.get()) {
+      return stack;
+    }
+  }
+  LOG_FATAL;
 }
 
 

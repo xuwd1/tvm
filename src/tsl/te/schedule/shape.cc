@@ -15,6 +15,35 @@ namespace te {
   CHECK(dim_c_ind_map[op->a.get()].size() == Size);      \
   CHECK(dim_c_ind_map[op->b.get()].size() == Size)
 
+
+bool IsPureCIndex(const Array<PrimExpr>& c_index) {
+  return c_index.size()==1;
+}
+
+bool IsCIndexEqual(const Array<PrimExpr>& ca, const Array<PrimExpr>& cb) {
+  const size_t size_a=ca.size();
+  const size_t size_b=cb.size();
+  if (size_a!=size_b) return false;
+  for (size_t i=0;i<size_a;i++) {
+    const auto ptr_a = ca[i].get();
+    const auto ptr_b = cb[i].get();
+    if (ptr_a != ptr_b) return false;
+  }
+  return true;
+}
+
+
+bool IsCIndicesEqual(const Array<Array<PrimExpr>>& ca,const Array<Array<PrimExpr>>& cb) {
+  const size_t size_a = ca.size();
+  const size_t size_b = cb.size();
+  if (size_a != size_b) return false;
+  for (size_t i = 0; i < size_a; i++) {
+    if (!IsCIndexEqual(ca[i],cb[i])) return false;
+  }
+  return true;
+}
+
+
 class TslExprDimCollectorNChecker final : public ExprVisitor {
  public:
   explicit TslExprDimCollectorNChecker() = default;
@@ -27,8 +56,7 @@ class TslExprDimCollectorNChecker final : public ExprVisitor {
       this->VisitExpr(op->a);
       this->VisitExpr(op->b);
       TSL_CHECK_BINOP_CHILDS_VISITED_AND_NDIM_OF(2);
-      // TODO: design a checker to confirm that every index primexpr(var) is the same for every dim
-      // resp. for tslAdd CHECK(dim_c_ind_map[op->a.get()].same_as(dim_c_ind_map[op->b.get()]));
+      CHECK(IsCIndicesEqual(dim_c_ind_map[op->a.get()],dim_c_ind_map[op->b.get()]));
       dim_c_ind_map[op] = dim_c_ind_map[op->a.get()];
     } else {
       CHECK(prop.defined());
@@ -50,6 +78,8 @@ class TslExprDimCollectorNChecker final : public ExprVisitor {
     in_combiner = true;
     prop = dim_c_ind_map[op->source[0].get()];
     this->VisitExpr(op->combiner->result[0]);
+    this->VisitExpr(op->combiner->lhs[0]);
+    this->VisitExpr(op->combiner->rhs[0]);
     in_combiner = false;
     dim_c_ind_map[op] = prop;
   }
@@ -108,6 +138,7 @@ class TslExprShapeAgent final : public ExprVisitor {
   }
 
   void Run() {
+    dim_c_ind_map=CollectDim(this->body);
     const auto start_shape = ExtractInit();
     out_map[body] = start_shape;
     this->VisitExpr(body);
@@ -142,6 +173,7 @@ class TslExprShapeAgent final : public ExprVisitor {
 
  private:
   const StageNode::DecomposeContxt& ctx;
+  std::unordered_map<const TslExprNode*, Array<Array<PrimExpr>>> dim_c_ind_map;
   Array<PrimExpr> ExtractInit() const;
   TslExpr body;
 };
