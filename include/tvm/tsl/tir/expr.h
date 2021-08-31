@@ -32,10 +32,7 @@ class TslExprNode : public PrimExprNode {
 
 class TslExpr : public PrimExpr {
  public:
-  virtual Array<Array<PrimExpr>> PropbackElemshape(Array<PrimExpr> source) {
-    CHECK_EQ(0, 1);
-    return Array<Array<PrimExpr>>();
-  }
+  
   TVM_DEFINE_OBJECT_REF_METHODS(TslExpr, PrimExpr, TslExprNode);
 };
 
@@ -283,19 +280,35 @@ class TslAddNode : public TslBinaryOpNode<TslAddNode> {
 
 class TslAdd : public TslExpr {
  public:
-  Array<Array<PrimExpr>> PropbackElemshape(Array<PrimExpr> source) final;
+  
   TVM_TSL_DECLARE_BINOP_CONSTRUCTOR(TslAdd);
   TVM_DEFINE_OBJECT_REF_METHODS(TslAdd, TslExpr, TslAddNode);
 };
 
+
+enum TslGemmType : int {
+
+  // A[i,r]@B[r,j]->C[i,j]
+  kNN = 0,
+  // A[i,r]@B[j,r]->C[i,j]
+  kNT = 1,
+  // A[r,i]@B[r,j]->C[i,j]
+  kTN = 2,
+  // A[r,i]@B[j,r]->C[i,j]
+  kTT = 3
+  
+};
+
+
 class TslGemmNode : public TslBinaryOpNode<TslGemmNode> {
  public:
-  static constexpr const char* _type_key = "tir.TslGemmw";
+  TslGemmType op_type;
+  static constexpr const char* _type_key = "tir.TslGemm";
 };
 
 class TslGemm : public TslExpr {
  public:
-  TVM_TSL_DECLARE_BINOP_CONSTRUCTOR(TslGemm);
+  TVM_DLL TslGemm(TslExpr a,TslExpr b,TslGemmType type=TslGemmType::kNN);
   TVM_DEFINE_OBJECT_REF_METHODS(TslGemm, TslExpr, TslGemmNode);
 };
 
@@ -337,7 +350,7 @@ class TslProducerLoad : public TslExpr {
  public:
   TVM_DLL explicit TslProducerLoad(DataProducer producer, Array<PrimExpr> indices);
   TVM_DLL explicit TslProducerLoad(DataProducer producer, Array<Array<PrimExpr>> c_indices);
-  Array<Array<PrimExpr>> PropbackElemshape(Array<PrimExpr> source) final;
+  
   TVM_DEFINE_OBJECT_REF_METHODS(TslProducerLoad, TslExpr, TslProducerLoadNode);
 };
 

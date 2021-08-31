@@ -18,7 +18,7 @@
 #include <string>
 #include <vector>
 #include <tvm/tsl/tsl_debug_lang.h>
-
+#include <tvm/tsl/te/expr_shape_infer.h>
 using namespace tvm;
 using namespace std;
 
@@ -66,6 +66,12 @@ int main() {
   Array<tir::IterVar> ret;
   sch[C].decompose({64,64},ret);
   te::TslPrintDecomposeCtx(sch[C].as<te::StageNode>());
+
+  auto req=te::CollectDim(Downcast<tir::TslAdd>(C->op.as<te::ComputeOpNode>()->body[0]));
+  for (auto& kv:req) {
+    cout<<kv.first<<":"<<kv.second<<endl;
+  }
+
 
   // auto C_op = C->op;
   // auto C_computeNode = *C_op.as<te::ComputeOpNode>();

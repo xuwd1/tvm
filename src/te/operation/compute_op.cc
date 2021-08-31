@@ -114,7 +114,7 @@ Tensor compute(Array<PrimExpr> shape, FCompute fcompute, std::string name, std::
   return ComputeOp(name, tag, attrs, axis, {fcompute(args)}).output(0);
 }
 
-Tensor compute(Array<PrimExpr> shape, TSLCompute fcompute, std::string name, std::string tag,
+Tensor  compute(Array<PrimExpr> shape, TSLCompute fcompute, std::string name, std::string tag,
                Map<String, ObjectRef> attrs) {
   if (attrs.find("TslOp") == attrs.end()) {
     attrs.Set("TslOp", Bool(1));

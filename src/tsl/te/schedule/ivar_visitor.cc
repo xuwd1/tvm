@@ -34,7 +34,7 @@ void ExtractRootPathIvarShape(const ComputeOp& op, const Array<IterVar>& request
       for (size_t i = 0; i < c_indices.size(); i++) {
         Array<PrimExpr> c_index = c_indices[i];
         const VarNode* index_var;
-        if (c_index.size()==1) {
+        if (c_index.size()==1) { //only trust pure path
           index_var=c_index[0].as<VarNode>();
           CHECK(index_var != nullptr);
           size_t pos = FindVar(requested, GetRef<Var>(index_var));

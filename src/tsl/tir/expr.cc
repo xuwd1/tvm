@@ -197,13 +197,6 @@ TVM_STATIC_IR_FUNCTOR(ReprPrinter, vtable)
 // TslAdd
 TVM_DEFINE_BINOP_CONSTRUCTOR(TslAdd);
 
-Array<Array<PrimExpr>> TslAdd::PropbackElemshape(Array<PrimExpr> source) {
-  Array<Array<PrimExpr>> ret;
-  ret.push_back(source);
-  ret.push_back(source);
-  return ret;
-}
-
 TVM_REGISTER_NODE_TYPE(TslAddNode);
 
 TVM_STATIC_IR_FUNCTOR(ReprPrinter, vtable)
@@ -222,7 +215,18 @@ TVM_REGISTER_GLOBAL("tir.TslAdd").set_body_typed([](TslExpr a, TslExpr b) {
 
 //TslGemm
 
-TVM_DEFINE_BINOP_CONSTRUCTOR(TslGemm);
+TslGemm::TslGemm(TslExpr a, TslExpr b, TslGemmType type) {
+  using T=TslGemm::ContainerType;
+  CHECK(a.defined()) << "ValueError: a is undefined\n";
+  CHECK(b.defined()) << "ValueError: b is undefined\n";
+  CHECK(a.dtype() == b.dtype()) << "TypeError: mismatched types\n";
+  ObjectPtr<T> node = make_object<T>();
+  node->dtype = a.dtype();
+  node->a = std::move(a);
+  node->b = std::move(b);
+  node->op_type = type;
+  data_ = std::move(node);
+}
 
 
 TVM_REGISTER_NODE_TYPE(TslGemmNode);
@@ -230,7 +234,7 @@ TVM_REGISTER_NODE_TYPE(TslGemmNode);
 TVM_STATIC_IR_FUNCTOR(ReprPrinter, vtable)
     .set_dispatch<TslGemmNode>([](const ObjectRef& node, ReprPrinter* p) {
       auto* op = static_cast<const TslGemmNode*>(node.get());
-      p->stream << "TslGemm(";
+      p->stream << "TslGemm<<"<<op->op_type<<"(";
       p->Print(op->a);
       p->stream << ", ";
       p->Print(op->b);
@@ -257,9 +261,7 @@ tvm::tir::TslProducerLoad::TslProducerLoad(DataProducer producer,
   data_=std::move(node);
 }
 
-Array<Array<PrimExpr>> TslProducerLoad::PropbackElemshape(Array<PrimExpr> source) {
-  return Array<Array<PrimExpr>>();
-}
+
 
 TVM_REGISTER_GLOBAL("tir.TslProducerLoad")
     .set_body_typed([](DataProducer producer, Array<PrimExpr> indices) {
