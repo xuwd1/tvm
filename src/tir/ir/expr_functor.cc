@@ -131,6 +131,12 @@ void ExprVisitor::VisitExpr_(const TslGemmNode* op) {
   this->VisitExpr(op->b);
 }
 
+void ExprVisitor::VisitExpr_(const TslConvNode* op) {
+  this->VisitExpr(op->b);
+  this->VisitExpr(op->a);
+}
+
+
 void ExprVisitor::VisitExpr_(const TslVarNode* op) {}
 
 void ExprVisitor::VisitExpr_(const TslReduceNode* op) {

@@ -243,6 +243,35 @@ TVM_STATIC_IR_FUNCTOR(ReprPrinter, vtable)
 
 TVM_REGISTER_GLOBAL("tir.TslGemm").set_body_typed([](TslExpr a, TslExpr b) { return TslGemm(a, b); });
 
+TslConv::TslConv(TslExpr a, TslExpr b, TslConvType type) {
+  using T=TslConv::ContainerType;
+  CHECK(a.defined()) << "ValueError: a is undefined\n";
+  CHECK(b.defined()) << "ValueError: b is undefined\n";
+  CHECK(a.dtype() == b.dtype()) << "TypeError: mismatched types\n";
+  ObjectPtr<T> node = make_object<T>();
+  node->dtype = a.dtype();
+  node->a = std::move(a);
+  node->b = std::move(b);
+  node->op_type = type;
+  data_ = std::move(node);
+}
+
+TVM_REGISTER_NODE_TYPE(TslConvNode);
+
+TVM_STATIC_IR_FUNCTOR(ReprPrinter, vtable)
+    .set_dispatch<TslConvNode>([](const ObjectRef& node, ReprPrinter* p) {
+      auto* op = static_cast<const TslConvNode*>(node.get());
+      p->stream << "TslConv<<" << op->op_type << "(";
+      p->Print(op->a);
+      p->stream << ", ";
+      p->Print(op->b);
+      p->stream << ')';
+    });
+
+TVM_REGISTER_GLOBAL("tir.TslConv").set_body_typed([](TslExpr a, TslExpr b) {
+  return TslGemm(a, b);
+});
+
 // ProducerLoad
 TslProducerLoad::TslProducerLoad(DataProducer producer, Array<PrimExpr> indices) {
   ObjectPtr<TslProducerLoadNode> node = make_object<TslProducerLoadNode>();

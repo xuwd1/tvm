@@ -113,12 +113,42 @@ class TslExprDimCollectorNChecker final : public ExprVisitor {
     dim_c_ind_map[op] = out_dim_map;
   }
 
+  void VisitExpr_(const TslConvNode* op) override {
+    this->VisitExpr(op->b); //visit kernel first
+    this->VisitExpr(op->a);
+    Array<Array<PrimExpr>> out_dim_map;
+    switch (op->op_type) {
+      case (TslConvType::kNHWC_HWIO): {
+        TSL_CHECK_BINOP_CHILDS_VISITED_AND_NDIM_OF(4);
+        out_dim_map.push_back(dim_c_ind_map[op->a.get()][0]);
+        const auto ih=dim_c_ind_map[op->a.get()][1];
+        const auto rh=dim_c_ind_map[op->b.get()][0];
+        out_dim_map.push_back(_extract_nonreduction_for_conv(ih,rh));
+        const auto iw = dim_c_ind_map[op->a.get()][2];
+        const auto rw = dim_c_ind_map[op->b.get()][1];
+        out_dim_map.push_back(_extract_nonreduction_for_conv(iw, rw));
+        out_dim_map.push_back(dim_c_ind_map[op->b.get()][3]);
+      }
+    }
+    dim_c_ind_map[op]=out_dim_map;
+  }
+
   void Run(TslExpr e) { this->VisitExpr(e); }
   std::unordered_map<const TslExprNode*, Array<Array<PrimExpr>>> dim_c_ind_map;
 
  private:
   bool in_combiner{false};
   Array<Array<PrimExpr>> prop;
+  Array<PrimExpr> _extract_nonreduction_for_conv(Array<PrimExpr> c_index, Array<PrimExpr> r_c_index) {
+    CHECK(r_c_index.size()==1);
+    CHECK(c_index.size()==2);
+    Array<PrimExpr> ret;
+    for (auto &v:c_index) {
+      if (v.get()==r_c_index[0].get()) continue;
+      ret.push_back(v);
+    }
+    return ret;
+  }
 };
 
 std::unordered_map<const TslExprNode*, Array<Array<PrimExpr>>> CollectDim(TslExpr e) {
@@ -136,15 +166,15 @@ class TslExprShapeAgent final : public ExprVisitor {
     CHECK(op->body.size() == 1) << "ComputeOp must have body of size 1";
     this->body = Downcast<TslExpr>(op->body[0]);
   }
+  using ExprVisitor::VisitExpr;
 
   void Run() {
     dim_c_ind_map=CollectDim(this->body);
-    const auto start_shape = ExtractInit();
-    out_map[body] = start_shape;
+    //const auto start_shape = ExtractInit();
+    //out_map[body] = start_shape;
     this->VisitExpr(body);
   }
 
-  void VisitExpr(const PrimExpr& n) final { ExprVisitor::VisitExpr(n); }
 
   void VisitExpr_(const TslAddNode* op) final {
     const auto self = GetRef<TslAdd>(op);
@@ -168,17 +198,54 @@ class TslExprShapeAgent final : public ExprVisitor {
   // inmap[current_tslexpr]->{input_expr:shape}
   std::unordered_map<TslExpr,
                      std::unordered_map<TslExpr, Array<PrimExpr>, ObjectPtrHash, ObjectPtrEqual>,
-                     ObjectPtrHash, ObjectPtrEqual>
-      in_map;
+                     ObjectPtrHash, ObjectPtrEqual> in_map;
+     
 
  private:
   const StageNode::DecomposeContxt& ctx;
   std::unordered_map<const TslExprNode*, Array<Array<PrimExpr>>> dim_c_ind_map;
+  std::vector<std::pair<Array<PrimExpr>,PrimExpr>> c_index_shape_lut;
   Array<PrimExpr> ExtractInit() const;
+  Array<PrimExpr> GetOutShapeFor(TslExprNode* op);
+  PrimExpr AllocShapeForCIndex(Array<PrimExpr> c_index);
+  bool _lutlookup(const Array<PrimExpr>& c_index, PrimExpr& ret);
   TslExpr body;
 };
 
 void InferShape(const Stage);  // TODO
+
+Array<PrimExpr> TslExprShapeAgent::GetOutShapeFor(TslExprNode* op) {
+  const auto dim_c_indices_map=this->dim_c_ind_map[op];
+  Array<PrimExpr> ret;
+  for (auto& c_index:dim_c_indices_map) {
+    PrimExpr shape;
+    if (_lutlookup(c_index, shape)) {  // hit
+      ret.push_back(shape);
+    } else {
+      
+    }
+  }
+  return ret;
+
+}
+
+PrimExpr TslExprShapeAgent::AllocShapeForCIndex(Array<PrimExpr> c_index) {
+  return PrimExpr();
+
+
+}
+
+bool TslExprShapeAgent::_lutlookup(const Array<PrimExpr>& c_index, PrimExpr& ret) {
+  for (const auto& pair:this->c_index_shape_lut) {
+    const auto& lut_c_index=pair.first;
+    if (IsCIndexEqual(lut_c_index,c_index)) {
+      ret=pair.second;
+      return true;
+    }
+  }
+  return false;
+}
+
 
 Array<PrimExpr> TslExprShapeAgent::ExtractInit() const {
   Array<PrimExpr> ret;

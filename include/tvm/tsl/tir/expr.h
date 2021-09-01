@@ -312,6 +312,26 @@ class TslGemm : public TslExpr {
   TVM_DEFINE_OBJECT_REF_METHODS(TslGemm, TslExpr, TslGemmNode);
 };
 
+enum TslConvType : int{
+  // A[n,h,w,c] * K[h,w,i,o]->C[n,h,w,c]
+  kNHWC_HWIO=0
+};
+
+
+class TslConvNode: public TslBinaryOpNode<TslConvNode> {
+public:
+  TslConvType op_type;
+  static constexpr const char* _type_key="tir.TslConv";
+};
+
+
+class TslConv : public TslExpr {
+public:
+  TVM_DLL TslConv(TslExpr a,TslExpr b,TslConvType type=TslConvType::kNHWC_HWIO);
+  TVM_DEFINE_OBJECT_REF_METHODS(TslConv,TslExpr,TslConvNode);
+};
+
+
 class TslProducerLoadNode : public TslExprNode {
  public:
   /*! \brief The buffer producer. */
