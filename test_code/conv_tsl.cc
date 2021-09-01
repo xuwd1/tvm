@@ -44,8 +44,8 @@ int main() {
   te::Tensor CT = te::Tslcompute(
       {N,H-2,W-2,OC }, std::function<te::TslExpr(tir::Var, tir::Var, tir::Var, tir::Var)>(
         [=](tir::Var n, tir::Var h, tir::Var w, tir::Var c)->tir::TslExpr {
-                                      auto pa= A({{n}, {h, rx}, {w, ry}, {rc}});
-          const auto pb=B({{rx}, {ry}, {rc}, {c}});
+          auto pa= A.TslPload({{n}, {h, rx}, {w, ry}, {rc}});
+                           const auto pb = B.TslPload({{rx}, {ry}, {rc}, {c}});
           return tsl_sum(tir::TslConv(pa,pb),{rx,ry,rc});
                 } 
         ),

@@ -44,7 +44,7 @@ PrimExpr Tensor::operator()(Array<Var> indices) const {
   return operator()(arr);
 }
 
-TslExpr Tensor::operator()(Array<Array<PrimExpr>> c_indices) const {
+TslExpr Tensor::TslPload(Array<Array<PrimExpr>> c_indices) const {
   CHECK((*this)->op->attrs.count("TslOp"))<<"compound indexing only available to TslOp";
   if (ndim()!=0) {
     CHECK_EQ(ndim(), c_indices.size()) << "Tensor dimension mismatch in compound indexer"
@@ -58,7 +58,7 @@ TslExpr Tensor::operator()(Array<Array<Var>> c_indices) const {
   for (auto &arr:c_indices) {
     expr_c_indices.push_back(Array<PrimExpr>(arr.begin(),arr.end()));
   }
-  return operator()(expr_c_indices);
+  return TslPload(expr_c_indices);
 }
 
 TslExpr Tensor::TslPLoad(Array<PrimExpr> indices) const { 

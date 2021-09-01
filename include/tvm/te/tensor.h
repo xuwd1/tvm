@@ -154,7 +154,7 @@ class Tensor : public DataProducer {
   //legacy interface, now used to act as shortcut to creating pure compound indices!
   TVM_DLL TslExpr TslPLoad(Array<PrimExpr> indices) const;
   
-  TVM_DLL TslExpr operator()(Array<Array<PrimExpr>> c_indices) const;
+  TVM_DLL TslExpr TslPload(Array<Array<PrimExpr>> c_indices) const;
   
   TVM_DLL TslExpr operator()(Array<Array<Var>> c_indices) const;
 
