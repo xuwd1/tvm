@@ -52,5 +52,9 @@ int main() {
     cout << kv.first << ":" << kv.second << endl;
   }
 
+  auto map=te::InferShape(sch[C]);
+  for (auto& kv : map) {
+    cout << kv.first << ":" << kv.second << endl;
+  }
 }
 

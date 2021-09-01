@@ -757,7 +757,8 @@ class StageNode : public Object {
     //void push_back(const DecompStack& stack) {this->stacks.push_back(stack);}
     //DecompStack& operator[](size_t index) {return this->stacks[index];}
     //const DecompStack& operator[](size_t index) const {return this->stacks[index];}
-    DecompStack& find(const PrimExpr& index_var);
+  public:
+    const DecompStack& find(const PrimExpr& index_var) const;
   };
 
   //using DecomposeContxt = std::vector<DecompStack>;

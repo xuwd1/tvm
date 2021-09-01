@@ -57,7 +57,7 @@ int main() {
 
   te::Tensor C = te::compute(
       {M, N}, std::function<te::TslExpr(tir::Var, tir::Var)>([=](tir::Var i, tir::Var j) {
-        return te::TslAdd(A.TslPLoad({i, j}), B.TslPLoad({i, j}));
+        return te::TslAdd(A.TslPLoad(Array<PrimExpr>({i, j})), B.TslPLoad(Array<PrimExpr>({i, j})));
       }),
       "tsladd(A,B)");
 
@@ -70,6 +70,11 @@ int main() {
   auto req=te::CollectDim(Downcast<tir::TslAdd>(C->op.as<te::ComputeOpNode>()->body[0]));
   for (auto& kv:req) {
     cout<<kv.first<<":"<<kv.second<<endl;
+  }
+
+   auto map = te::InferShape(sch[C]);
+  for (auto& kv : map) {
+    cout << kv.first << ":" << kv.second << endl;
   }
 
 

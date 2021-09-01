@@ -3,6 +3,8 @@
 #include <tvm/tir/expr.h>
 #include <tvm/tir/expr_functor.h>
 #include <tvm/tsl/te/expr_shape_infer.h>
+#include <tvm/tsl/tir/tsl_downcast.h>
+
 namespace tvm {
 namespace te {
 
@@ -30,6 +32,15 @@ bool IsCIndexEqual(const Array<PrimExpr>& ca, const Array<PrimExpr>& cb) {
     if (ptr_a != ptr_b) return false;
   }
   return true;
+}
+
+size_t FindCIndex(const Array<PrimExpr>& c_index, const Array<Array<PrimExpr>>& target_c_indices) {
+  for (size_t i=0;i<target_c_indices.size();i++) {
+    if (IsCIndexEqual(c_index,target_c_indices[i])) {
+      return i;
+    }
+  }
+  return target_c_indices.size();
 }
 
 
@@ -164,37 +175,81 @@ class TslExprShapeAgent final : public ExprVisitor {
     const ComputeOpNode* op = stage->op.as<ComputeOpNode>();
     CHECK(op->attrs.count("TslOp"));
     CHECK(op->body.size() == 1) << "ComputeOp must have body of size 1";
-    this->body = Downcast<TslExpr>(op->body[0]);
+
+    this->body = TslRuntimeDowncast(op->body[0]);
   }
   using ExprVisitor::VisitExpr;
 
   void Run() {
     dim_c_ind_map=CollectDim(this->body);
-    //const auto start_shape = ExtractInit();
-    //out_map[body] = start_shape;
+    const auto start_shape = ExtractInit();
+    out_map[body.get()] = start_shape;
     this->VisitExpr(body);
   }
 
+  void VisitExpr_(const TslProducerLoadNode* op) override {
+    CHECK(this->out_map[op].defined());
+    return;
+  }
 
   void VisitExpr_(const TslAddNode* op) final {
-    const auto self = GetRef<TslAdd>(op);
-    CHECK(this->out_map[self].defined());
-    const auto self_out_shape = this->out_map[self];
-    this->in_map[self][op->a] = self_out_shape;
-    this->in_map[self][op->b] = self_out_shape;
-    this->out_map[op->a] = self_out_shape;
-    this->out_map[op->b] = self_out_shape;
+    CHECK(this->out_map[op].defined());
+    const auto self_out_shape = this->out_map[op];
+    //this->in_map[self][op->a] = self_out_shape;
+    //this->in_map[self][op->b] = self_out_shape;
+    this->out_map[op->a.get()] = self_out_shape;
+    this->out_map[op->b.get()] = self_out_shape;
+    this->VisitExpr(op->a);
+    this->VisitExpr(op->b);
+  }
+
+  void VisitExpr_(const TslGemmNode* op) override {
+    CHECK(this->out_map[op].defined());
+    const auto& self_dim_c_indices = dim_c_ind_map[op];
+    const auto& dim_c_indices_A= dim_c_ind_map[op->a.get()];
+    Array<PrimExpr> out_shape_A;
+    for (auto& c_index:dim_c_indices_A) {
+      if (IsPureCIndex(c_index)) {
+        size_t loc=FindCIndex(c_index,self_dim_c_indices);
+        if (loc<self_dim_c_indices.size()) {  //found
+          out_shape_A.push_back(this->out_map[op][loc]);
+        }else { //not found-> go to decomp stack 
+          auto& stack=ctx.find(c_index[0]);
+          out_shape_A.push_back(stack[stack.size()-1].factor);
+        }
+      } else { //Not pure -- for now consider this illegal for TslGemmNode
+        LOG_FATAL;
+      }
+    }
+    this->out_map[op->a.get()]=out_shape_A;
+    const auto& dim_c_indices_B = dim_c_ind_map[op->b.get()];
+    Array<PrimExpr> out_shape_B;
+    for (auto& c_index : dim_c_indices_B) {
+      if (IsPureCIndex(c_index)) {
+        size_t loc = FindCIndex(c_index, self_dim_c_indices);
+        if (loc < self_dim_c_indices.size()) {  // found
+          out_shape_B.push_back(this->out_map[op][loc]);
+        } else {  // not found-> go to decomp stack
+          auto& stack = ctx.find(c_index[0]);
+          out_shape_B.push_back(stack[stack.size() - 1].factor);
+        }
+      } else {  // Not pure -- for now consider this illegal for TslGemmNode
+        LOG_FATAL;
+      }
+    }
+    this->out_map[op->b.get()] = out_shape_B;
     this->VisitExpr(op->a);
     this->VisitExpr(op->b);
   }
 
   void VisitExpr_(const TslReduceNode* op) final {
-    const auto self = GetRef<TslReduce>(op);
-    CHECK(this->out_map[self].defined());
-    const auto self_out_shape = this->out_map[self];
+    CHECK(this->out_map[op].defined());
+    const auto self_out_shape = this->out_map[op];
   }
 
-  std::unordered_map<TslExpr, Array<PrimExpr>, ObjectPtrHash, ObjectPtrEqual> out_map;
+  std::unordered_map<const TslExprNode*, Array<PrimExpr>> out_map;
+
+  //NOT NECCESARY
   // inmap[current_tslexpr]->{input_expr:shape}
   std::unordered_map<TslExpr,
                      std::unordered_map<TslExpr, Array<PrimExpr>, ObjectPtrHash, ObjectPtrEqual>,
@@ -205,14 +260,18 @@ class TslExprShapeAgent final : public ExprVisitor {
   const StageNode::DecomposeContxt& ctx;
   std::unordered_map<const TslExprNode*, Array<Array<PrimExpr>>> dim_c_ind_map;
   std::vector<std::pair<Array<PrimExpr>,PrimExpr>> c_index_shape_lut;
-  Array<PrimExpr> ExtractInit() const;
+  Array<PrimExpr> ExtractInit();
   Array<PrimExpr> GetOutShapeFor(TslExprNode* op);
   PrimExpr AllocShapeForCIndex(Array<PrimExpr> c_index);
   bool _lutlookup(const Array<PrimExpr>& c_index, PrimExpr& ret);
   TslExpr body;
 };
 
-void InferShape(const Stage);  // TODO
+std::unordered_map<const TslExprNode*, Array<PrimExpr>> InferShape(const Stage& stage) {
+  TslExprShapeAgent agent(stage);
+  agent.Run();
+  return agent.out_map;
+}
 
 Array<PrimExpr> TslExprShapeAgent::GetOutShapeFor(TslExprNode* op) {
   const auto dim_c_indices_map=this->dim_c_ind_map[op];
@@ -247,16 +306,15 @@ bool TslExprShapeAgent::_lutlookup(const Array<PrimExpr>& c_index, PrimExpr& ret
 }
 
 
-Array<PrimExpr> TslExprShapeAgent::ExtractInit() const {
+Array<PrimExpr> TslExprShapeAgent::ExtractInit() {
   Array<PrimExpr> ret;
-  CHECK(!this->ctx.empty()) << "dim size has to be greater than 0!";
   const size_t s_size = this->ctx[0].size();
-  for (size_t dim = 0; dim < this->ctx.size(); dim++) {
-    auto& stack = ctx[dim];
-    if (stack.iter_type == IterVarType::kDataPar) {
-      CHECK(stack.size() == s_size) << "decompstack having different depth is illegal";
-      ret.push_back(stack[s_size - 1].factor);
-    }
+  auto& c_indices=this->dim_c_ind_map[body.get()];
+  for (auto& c_index:c_indices) {
+    CHECK(IsPureCIndex(c_index));
+    auto stack=ctx.find(c_index[0]);
+    CHECK(stack.size() == s_size) << "decompstack having different depth is illegal";
+    ret.push_back(stack[s_size-1].factor);
   }
   return ret;
 }

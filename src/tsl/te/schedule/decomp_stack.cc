@@ -35,7 +35,7 @@ auto StageNode::DecompStack::operator[](size_t index) const ->const DecompEntry&
   return this->entries[index];
 }
 
-auto StageNode::DecomposeContxt::find(const PrimExpr& index_var) -> DecompStack& {
+auto StageNode::DecomposeContxt::find(const PrimExpr& index_var) const -> const DecompStack& {
   for (auto &stack:(*this)) {
     CHECK(stack.size());
     if (stack[0].pathivar->var.get()==index_var.get()) {

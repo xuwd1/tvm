@@ -21,6 +21,7 @@
  */
 #include <tvm/tir/expr_functor.h>
 #include <tvm/tir/functor_common.h>
+#include <tvm/tsl/tir/tsl_downcast.h>
 
 namespace tvm {
 namespace tir {
@@ -334,15 +335,6 @@ PrimExpr ExprMutator::VisitExpr_(const ShuffleNode* op) {
 }
 //TslExprs
 
-#define DEFINE_TSL_RUNTIME_DOWNCAST_ENTRY(ARG, OP) \
-  if (ARG->IsInstance<OP##Node>()) {               \
-    return Downcast<OP>(ARG);                      \
-  }
-
-TslExpr TslRuntimeDowncast(PrimExpr x) {
-  DEFINE_TSL_RUNTIME_DOWNCAST_ENTRY(x, TslAdd);
-  DEFINE_TSL_RUNTIME_DOWNCAST_ENTRY(x, TslProducerLoad);
-}
 
 PrimExpr ExprMutator::VisitExpr_(const TslProducerLoadNode* op) {
   auto fmutate = [this](const PrimExpr& e) { return this->VisitExpr(e); };
