@@ -180,8 +180,7 @@ Stage& Stage::decompose(Array<PrimExpr> factors, Array<IterVar>& ret_ivars) {
       break;
     }
   }
-  Array<IterVar> ret;
-  for (auto factor:factors) {
+  for (auto& factor:factors) {
     auto& stack = self->decompose_ctx[ind];
     CHECK(stack.iter_type == IterVarType::kDataPar)<<"decompose should only be used on non-reduce axis";
     const auto root_path_ivar=stack[0].pathivar;
@@ -189,12 +188,44 @@ Stage& Stage::decompose(Array<PrimExpr> factors, Array<IterVar>& ret_ivars) {
     std::string prefix=".L";
     ss<<stack.size();
     IterVar path_ivar=IterVar(Range(),root_path_ivar->var.copy_with_suffix(prefix+ss.str()),stack.iter_type);
+    ret_ivars.push_back(path_ivar);
     auto entry=StageNode::DecompEntry::Create(factor,path_ivar);
     stack.entries.push_back(entry);
     ind++;
   }
   return (*this);
-} 
+}
+
+Stage& Stage::decompose_reduction(Array<PrimExpr> factors,Array<IterVar>& ret_r_ivars) {
+  StageNode* self=operator->();
+  //search for reduce ivar decompStack start index
+  size_t ind=0;
+  for (;ind<self->decompose_ctx.size();ind++) {
+    if (self->decompose_ctx[ind].iter_type==IterVarType::kCommReduce) {
+      break;
+    }
+  }
+  Array<IterVar> ret;
+  for (auto& factor:factors) {
+    auto& stack=self->decompose_ctx[ind];
+    CHECK(stack.iter_type == IterVarType::kCommReduce)
+        << "decompose_reduction should only be used on reduce axis";
+    const auto root_path_ivar = stack[0].pathivar;
+    std::stringstream ss;
+    std::string prefix = ".L";
+    ss << stack.size();
+    IterVar path_ivar =
+        IterVar(Range(), root_path_ivar->var.copy_with_suffix(prefix + ss.str()), stack.iter_type);
+    ret_r_ivars.push_back(path_ivar);
+    auto entry=StageNode::DecompEntry::Create(factor,path_ivar);
+    stack.entries.push_back(entry);
+    ind++;
+  }
+  return (*this);
+}
+
+
+
 #endif
 
 bool Stage::is_scheduled() const {

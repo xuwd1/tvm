@@ -321,13 +321,14 @@ enum TslConvType : int{
 class TslConvNode: public TslBinaryOpNode<TslConvNode> {
 public:
   TslConvType op_type;
+  Array<PrimExpr> strides;
   static constexpr const char* _type_key="tir.TslConv";
 };
 
 
 class TslConv : public TslExpr {
 public:
-  TVM_DLL TslConv(TslExpr a,TslExpr b,TslConvType type=TslConvType::kNHWC_HWIO);
+  TVM_DLL TslConv(TslExpr a,TslExpr b,TslConvType type=TslConvType::kNHWC_HWIO,Array<PrimExpr> strides={-1,1,1,-1});
   TVM_DEFINE_OBJECT_REF_METHODS(TslConv,TslExpr,TslConvNode);
 };
 

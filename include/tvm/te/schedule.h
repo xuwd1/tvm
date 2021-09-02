@@ -259,6 +259,8 @@ class Stage : public ObjectRef {
    */
   TVM_DLL Stage& decompose(Array<PrimExpr> factors, Array<IterVar>& ret_ivars);
 
+  TVM_DLL Stage& decompose_reduction(Array<PrimExpr> factors, Array<IterVar>& ret_r_ivars);
+
   bool is_scheduled() const;
   /*!
    * \brief Get attachment spec of current stage.

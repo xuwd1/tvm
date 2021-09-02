@@ -243,7 +243,7 @@ TVM_STATIC_IR_FUNCTOR(ReprPrinter, vtable)
 
 TVM_REGISTER_GLOBAL("tir.TslGemm").set_body_typed([](TslExpr a, TslExpr b) { return TslGemm(a, b); });
 
-TslConv::TslConv(TslExpr a, TslExpr b, TslConvType type) {
+TslConv::TslConv(TslExpr a, TslExpr b, TslConvType type, Array<PrimExpr> strides) {
   using T=TslConv::ContainerType;
   CHECK(a.defined()) << "ValueError: a is undefined\n";
   CHECK(b.defined()) << "ValueError: b is undefined\n";
@@ -253,6 +253,15 @@ TslConv::TslConv(TslExpr a, TslExpr b, TslConvType type) {
   node->a = std::move(a);
   node->b = std::move(b);
   node->op_type = type;
+  switch (type) {
+    case(TslConvType::kNHWC_HWIO): {
+      CHECK(strides.size()==4);
+      CHECK(is_negative_const(strides[0]));
+      CHECK(is_negative_const(strides[3]));
+      CHECK(strides[1].as<IntImmNode>());
+      CHECK(strides[2].as<IntImmNode>());
+    }
+  }
   data_ = std::move(node);
 }
 

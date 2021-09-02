@@ -59,6 +59,6 @@ int main() {
 
   auto req = te::CollectDim(Downcast<tir::TslReduce>(CT->op.as<te::ComputeOpNode>()->body[0]));
   for (auto& kv : req) {
-    cout << kv.first << ":" << kv.second << endl;
+    cout << kv.first->GetTypeKey() << ":" << kv.second << endl;
   }
 }

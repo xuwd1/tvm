@@ -46,6 +46,9 @@ int main() {
   Array<tir::IterVar> ret;
   sch[C].decompose({64, 64}, ret);
   te::TslPrintDecomposeCtx(sch[C].as<te::StageNode>());
+  
+
+  sch[C].decompose_reduction({16},ret);
 
   auto req = te::CollectDim(Downcast<tir::TslReduce>(C->op.as<te::ComputeOpNode>()->body[0]));
   for (auto& kv : req) {
@@ -54,7 +57,7 @@ int main() {
 
   auto map=te::InferShape(sch[C]);
   for (auto& kv : map) {
-    cout << kv.first << ":" << kv.second << endl;
+    cout << kv.first->GetTypeKey() << ":" << kv.second << endl;
   }
 }
 
