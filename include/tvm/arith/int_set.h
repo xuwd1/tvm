@@ -139,7 +139,9 @@ class IntSet : public ObjectRef {
 //-----------------------------------------------
 // Integer set legacy API.
 //------------------------------------------------
-/*!
+
+IntSet EvalSet(PrimExpr e, const Map<Var, IntSet>& dom_map);
+    /*!
  * \brief Convert std::unordered_map<const VarNode*, IntSet> to Map<Var, IntSet>
  *
  * \param dom_map The domain map to convert.

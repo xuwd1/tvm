@@ -4,7 +4,7 @@
 #include <tvm/tir/expr_functor.h>
 #include <tvm/tsl/te/expr_shape_infer.h>
 #include <tvm/tsl/tir/tsl_downcast.h>
-
+#include "cind_utility.h"
 namespace tvm {
 namespace te {
 
@@ -228,18 +228,11 @@ class TslExprShapeAgent final : public ExprVisitor {
 
   void VisitExpr_(const TslGemmNode* op) override {
     CHECK(this->out_map[op].defined());
-    const auto& self_dim_c_indices = dim_c_ind_map[op];
     const auto& dim_c_indices_A= dim_c_ind_map[op->a.get()];
     Array<PrimExpr> out_shape_A;
     for (auto& c_index:dim_c_indices_A) {
       if (IsPureCIndex(c_index)) {
-        size_t loc=FindCIndex(c_index,self_dim_c_indices);
-        if (loc<self_dim_c_indices.size()) {  //found
-          out_shape_A.push_back(this->out_map[op][loc]);
-        }else { //not found-> go to decomp stack 
-          auto& stack=ctx.find(c_index[0]);
-          out_shape_A.push_back(stack[stack.size()-1].factor);
-        }
+        out_shape_A.push_back(GetPureCIndexShape(c_index, op));
       } else { //Not pure -- for now consider this illegal for TslGemmNode
         LOG_FATAL;
       }
@@ -249,13 +242,7 @@ class TslExprShapeAgent final : public ExprVisitor {
     Array<PrimExpr> out_shape_B;
     for (auto& c_index : dim_c_indices_B) {
       if (IsPureCIndex(c_index)) {
-        size_t loc = FindCIndex(c_index, self_dim_c_indices);
-        if (loc < self_dim_c_indices.size()) {  // found
-          out_shape_B.push_back(this->out_map[op][loc]);
-        } else {  // not found-> go to decomp stack
-          auto& stack = ctx.find(c_index[0]);
-          out_shape_B.push_back(stack[stack.size() - 1].factor);
-        }
+        out_shape_B.push_back(GetPureCIndexShape(c_index,op));
       } else {  // Not pure -- for now consider this illegal for TslGemmNode
         LOG_FATAL;
       }
@@ -267,18 +254,11 @@ class TslExprShapeAgent final : public ExprVisitor {
 
   void VisitExpr_(const TslConvNode* op) override {
     CHECK(this->out_map[op].defined());
-    const auto& self_dim_c_indices = dim_c_ind_map[op];
     const auto& dim_c_indices_k=dim_c_ind_map[op->b.get()];
     Array<PrimExpr> out_shape_k;
     for (auto& c_index:dim_c_indices_k) {
       if (IsPureCIndex(c_index)) {
-        size_t loc=FindCIndex(c_index,self_dim_c_indices);
-        if (loc<self_dim_c_indices.size()) {
-          out_shape_k.push_back(this->out_map[op][loc]);
-        }else {
-          auto& stack=ctx.find(c_index[0]);
-          out_shape_k.push_back(stack[stack.size()-1].factor);
-        }
+        out_shape_k.push_back(GetPureCIndexShape(c_index,op));
       } else { //consider kernel having non-pure C_index illegal
         LOG_FATAL;
       }
@@ -286,38 +266,40 @@ class TslExprShapeAgent final : public ExprVisitor {
     this->out_map[op->b.get()]=out_shape_k;
     const auto& dim_c_indices_i=dim_c_ind_map[op->a.get()];
     Array<PrimExpr> out_shape_i;
+    size_t dim=0;
     for (auto& c_index:dim_c_indices_i) {
       if (IsPureCIndex(c_index)) {
-        size_t loc = FindCIndex(c_index, self_dim_c_indices);
-        if (loc < self_dim_c_indices.size()) {
-          out_shape_i.push_back(this->out_map[op][loc]);
-        } else {
-          auto& stack = ctx.find(c_index[0]);
-          out_shape_i.push_back(stack[stack.size() - 1].factor);
-        }
+        out_shape_i.push_back(GetPureCIndexShape(c_index,op));
       }else { //okay, here comes the real thing...
         CHECK(c_index.size()==2)<<"only support c_index.size()==2 for now";
-        auto ind0=Downcast<Var>(c_index[0]);
-        auto ind1=Downcast<Var>(c_index[1]);
+        Map<Var,IntSet> dom_map;
         
+        for (auto& pure:c_index) {
+          CHECK(pure.as<VarNode>());
+          PrimExpr shape = GetPureCIndexShape({pure}, op);
+          auto interval =IntSet::FromRange(Range(0,shape));
+          dom_map.Set(Downcast<Var>(pure), interval);
+        }
+        std::cout<<op->strides<<std::endl;
+        PrimExpr conv_stride=op->strides[dim];
+        PrimExpr eval_expr=c_index[0]*conv_stride+c_index[1];
+        IntSet eval_set = arith::EvalSet(eval_expr, dom_map);
+        CHECK(is_zero(eval_set.min()));
+        PrimExpr shape = eval_set.max()+1;
+        out_shape_i.push_back(shape);
       }
+      dim++;
     }
+    this->out_map[op->a.get()]=out_shape_i;
   }
 
   void VisitExpr_(const TslReduceNode* op) override {
     CHECK(this->out_map[op].defined());
-    const auto& self_dim_c_indices = dim_c_ind_map[op];
     const auto& dim_c_indices_source= dim_c_ind_map[op->source[0].get()];
     Array<PrimExpr> out_shape_source;
     for (auto& c_index:dim_c_indices_source) {
       if (IsPureCIndex(c_index)) {
-        size_t loc=FindCIndex(c_index,self_dim_c_indices);
-        if (loc<self_dim_c_indices.size()) {
-          out_shape_source.push_back(this->out_map[op][loc]);
-        }else {
-          auto& stack=ctx.find(c_index[0]);
-          out_shape_source.push_back(stack[stack.size()-1].factor);
-        }
+        out_shape_source.push_back(GetPureCIndexShape(c_index,op));
       } else { //Not pure -- for now also consider this illegal for TslReduce
         LOG_FATAL;
       }
@@ -340,10 +322,9 @@ class TslExprShapeAgent final : public ExprVisitor {
      
 
  private:
-  //TODO: use a centralized function infershapeforchild to replace redundant codes above.
+  PrimExpr GetPureCIndexShape(const Array<PrimExpr>& child_pure, const TslExprNode* op);
   const StageNode::DecomposeContxt& ctx;
   std::unordered_map<const TslExprNode*, Array<Array<PrimExpr>>> dim_c_ind_map;
-  std::vector<std::pair<Array<PrimExpr>,PrimExpr>> c_index_shape_lut;
   Array<PrimExpr> ExtractInit();
   
   TslExpr body;
@@ -355,6 +336,17 @@ std::unordered_map<const TslExprNode*, Array<PrimExpr>> InferShape(const Stage& 
   return agent.out_map;
 }
 
+PrimExpr TslExprShapeAgent::GetPureCIndexShape(const Array<PrimExpr>& child_pure, const TslExprNode* op) {
+  const auto& parent_map=this->dim_c_ind_map[op];
+  size_t loc = FindCIndex(child_pure, parent_map);
+  if (loc < parent_map.size()) {
+    return this->out_map[op][loc];
+  } else {
+    auto& stack = ctx.find(child_pure[0]);
+    return stack[stack.size() - 1].factor;
+  }
+}
+
 
 
 
@@ -363,10 +355,12 @@ Array<PrimExpr> TslExprShapeAgent::ExtractInit() {
   const size_t s_size = this->ctx[0].size();
   auto& c_indices=this->dim_c_ind_map[body.get()];
   for (auto& c_index:c_indices) {
+    std::cout<<c_index<<std::endl;
     CHECK(IsPureCIndex(c_index));
     auto stack=ctx.find(c_index[0]);
     CHECK(stack.size() == s_size) << "decompstack having different depth is illegal";
     ret.push_back(stack[s_size-1].factor);
+    std::cout<<ret<<std::endl;
   }
   return ret;
 }

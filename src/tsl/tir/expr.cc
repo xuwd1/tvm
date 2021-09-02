@@ -262,6 +262,7 @@ TslConv::TslConv(TslExpr a, TslExpr b, TslConvType type, Array<PrimExpr> strides
       CHECK(strides[2].as<IntImmNode>());
     }
   }
+  node->strides=strides;
   data_ = std::move(node);
 }
 

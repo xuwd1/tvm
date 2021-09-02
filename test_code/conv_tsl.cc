@@ -51,14 +51,20 @@ int main() {
         ),
       "Conv(A,B)");
 
-  //auto sch = te::create_schedule({C->op});
-  //te::TslPrintDecomposeCtx(sch[C].as<te::StageNode>());
-  //Array<tir::IterVar> ret;
-  //sch[C].decompose({64, 64}, ret);
-  //te::TslPrintDecomposeCtx(sch[C].as<te::StageNode>());
+  auto sch = te::create_schedule({CT->op});
+  te::TslPrintDecomposeCtx(sch[CT].as<te::StageNode>());
+  Array<tir::IterVar> ret;
+  sch[CT].decompose({N, 1,1,C}, ret); //TODO:CHECK DECOOMPOSE FACTOR NUMBER AND VALUE!
+  te::TslPrintDecomposeCtx(sch[CT].as<te::StageNode>());
 
+  sch[CT].decompose_reduction({1,1,C},ret);
+  te::TslPrintDecomposeCtx(sch[CT].as<te::StageNode>());
   auto req = te::CollectDim(Downcast<tir::TslReduce>(CT->op.as<te::ComputeOpNode>()->body[0]));
   for (auto& kv : req) {
+    cout << kv.first->GetTypeKey() << ":" << kv.second << endl;
+  }
+  auto map = te::InferShape(sch[CT]);
+  for (auto& kv : map) {
     cout << kv.first->GetTypeKey() << ":" << kv.second << endl;
   }
 }

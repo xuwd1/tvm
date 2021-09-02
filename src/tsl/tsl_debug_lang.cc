@@ -12,11 +12,11 @@ void TslPrintDecomposeCtx(const StageNode* stage) {
   auto ctx=stage->decompose_ctx;
   cout << "IterType:";
   for (auto& stack:ctx) {
-    cout<<setw(46)<<stack.iter_type;
+    cout<<setw(20)<<stack.iter_type;
   }
   cout<<endl;
   cout<<"stacks:"<<endl;
-  cout<<setw(6)<<"Factor"<<setw(40)<<"Path"<<endl;
+  cout<<setw(6)<<"Factor"<<setw(20)<<"Path"<<endl;
   size_t layer=0;
   bool out=false;
   do {
